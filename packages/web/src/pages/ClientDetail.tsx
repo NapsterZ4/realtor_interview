@@ -268,7 +268,7 @@ export default function ClientDetail() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{client.name}</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {[client.email, client.phone].filter(Boolean).join(' \u00B7 ') || 'No contact info'}
+            {[client.email, client.phone].filter(Boolean).join(' · ') || 'No contact info'}
           </p>
         </div>
         <div className="text-right">
@@ -280,7 +280,7 @@ export default function ClientDetail() {
                 {classLabel[displayData.classification] || displayData.classification}
               </span>
               {!hasReport && latestSession && (
-                <p className="text-[10px] text-yellow-500 mt-1">Live preview \u00B7 {Math.round(latestSession.completionPercent)}% complete</p>
+                <p className="text-[10px] text-yellow-500 mt-1">Live preview · {Math.round(latestSession.completionPercent)}% complete</p>
               )}
             </>
           ) : latestSession ? (
@@ -302,8 +302,8 @@ export default function ClientDetail() {
           <div className="border border-gray-200 rounded-xl p-5 mb-6 flex items-center justify-between bg-gray-50">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm text-xl">
-                {displayData.action === 'SEND_TO_LENDER' ? '\u2708' :
-                 displayData.action === 'SCHEDULE_CONSULTATION' ? '\uD83D\uDCC5' : '\uD83D\uDD14'}
+                {displayData.action === 'SEND_TO_LENDER' ? '✈️' :
+                 displayData.action === 'SCHEDULE_CONSULTATION' ? '📅' : '🔔'}
               </div>
               <div>
                 <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Recommended Action</p>
@@ -354,7 +354,7 @@ export default function ClientDetail() {
 
           {/* Buyer Profile + Summary */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <Card icon="\uD83D\uDCCB" title="Buyer Profile">
+            <Card icon="📋" title="Buyer Profile">
               <dl className="space-y-3 text-sm">
                 <div className="flex"><dt className="text-gray-500 w-28 shrink-0">Type:</dt><dd className="font-medium text-gray-900">{displayData.profile.buyerType}</dd></div>
                 <div className="flex"><dt className="text-gray-500 w-28 shrink-0">Timeline:</dt><dd className="font-medium text-gray-900">{displayData.profile.timeline}</dd></div>
@@ -364,7 +364,7 @@ export default function ClientDetail() {
               </dl>
             </Card>
 
-            <Card icon="\uD83D\uDCDD" title="Summary">
+            <Card icon="📝" title="Summary">
               <p className="text-sm text-gray-600 leading-relaxed">
                 {displayData.summary || 'Summary will appear as the interview progresses.'}
               </p>
@@ -379,13 +379,13 @@ export default function ClientDetail() {
               </pre>
             </Card>
 
-            <Card icon="\uD83D\uDD0D" title="MLS Criteria">
+            <Card icon="🔍" title="MLS Criteria">
               <pre className="text-xs text-gray-700 bg-gray-50 rounded-lg p-3 whitespace-pre-wrap font-mono">
 {JSON.stringify(displayData.mlsCriteria, null, 2)}
               </pre>
             </Card>
 
-            <Card icon="\uD83D\uDCCD" title="Consultation Notes">
+            <Card icon="📍" title="Consultation Notes">
               <p className="text-sm text-gray-600 leading-relaxed">
                 {displayData.consultationNotes || 'Notes will appear as signals are extracted.'}
               </p>
@@ -406,7 +406,7 @@ export default function ClientDetail() {
       {/* No signals yet — show basic cards */}
       {!showReportLayout && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <Card icon="\uD83D\uDC64" title="Client Info">
+          <Card icon="👤" title="Client Info">
             <dl className="space-y-3 text-sm">
               <div><dt className="text-gray-500">Email</dt><dd className="font-medium">{client.email || '-'}</dd></div>
               <div><dt className="text-gray-500">Phone</dt><dd className="font-medium">{client.phone || '-'}</dd></div>
@@ -416,7 +416,7 @@ export default function ClientDetail() {
             </dl>
           </Card>
 
-          <Card icon="\uD83D\uDCAC" title="Interview">
+          <Card icon="💬" title="Interview">
             {latestSession ? (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">

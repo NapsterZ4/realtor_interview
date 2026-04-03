@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { dashboard } from '../lib/api';
+import { useEffect, useState, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { dashboard, clients as clientsApi } from '../lib/api';
 
 interface Summary {
   totalClients: number;
@@ -23,6 +23,25 @@ const classBg: Record<string, string> = {
   RESEARCH_STAGE: 'bg-gray-100 text-gray-700',
 };
 
+const workflowLabel: Record<string, string> = {
+  NEW: 'New',
+  INTERVIEW_SENT: 'Interview Sent',
+  INTERVIEW_COMPLETE: 'Interview Complete',
+  REPORT_READY: 'Report Ready',
+  ACTION_TAKEN: 'Action Taken',
+  FOLLOW_UP: 'Follow Up',
+  CLOSED: 'Closed',
+};
+
+const interviewStatusLabel: Record<string, string> = {
+  PENDING: 'Pending',
+  IN_PROGRESS: 'In Progress',
+  AWAITING_VALIDATION: 'Validating',
+  COMPLETED: 'Completed',
+  EXPIRED: 'Expired',
+  ABANDONED: 'Abandoned',
+};
+
 const interviewStatusColor: Record<string, string> = {
   PENDING: 'bg-gray-100 text-gray-600',
   IN_PROGRESS: 'bg-yellow-100 text-yellow-700',
@@ -32,10 +51,129 @@ const interviewStatusColor: Record<string, string> = {
   ABANDONED: 'bg-orange-100 text-orange-700',
 };
 
-function MiniBar({ value, color = 'bg-[#1e3a5f]' }: { value: number; color?: string }) {
+function scoreColor(score: number): string {
+  if (score >= 80) return 'text-green-600';
+  if (score >= 60) return 'text-blue-600';
+  if (score >= 40) return 'text-yellow-600';
+  return 'text-red-500';
+}
+
+function barColor(score: number): string {
+  if (score >= 80) return 'bg-green-500';
+  if (score >= 60) return 'bg-blue-500';
+  if (score >= 40) return 'bg-yellow-500';
+  return 'bg-red-400';
+}
+
+function MiniBar({ value, label }: { value: number; label: string }) {
   return (
-    <div className="w-full bg-gray-100 rounded-full h-1.5">
-      <div className={`${color} h-1.5 rounded-full`} style={{ width: `${Math.min(value, 100)}%` }} />
+    <div>
+      <div className="flex justify-between mb-0.5">
+        <span className="text-[10px] text-gray-400 uppercase">{label}</span>
+        <span className="text-[10px] font-medium text-gray-600">{Math.round(value)}</span>
+      </div>
+      <div className="w-full bg-gray-100 rounded-full h-1.5">
+        <div className={`${barColor(value)} h-1.5 rounded-full transition-all`} style={{ width: `${Math.min(value, 100)}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function ActionsMenu({ client, onDelete }: { client: any; onDelete: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setConfirming(false);
+      }
+    }
+    if (open) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  const interviewUrl = client.interviewToken
+    ? `${window.location.origin}/interview/${client.interviewToken}`
+    : null;
+
+  const handleCopy = () => {
+    if (!interviewUrl) return;
+    navigator.clipboard.writeText(interviewUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDelete = () => {
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
+    onDelete(client.id);
+    setOpen(false);
+    setConfirming(false);
+  };
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(!open); setConfirming(false); }}
+        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+        title="Actions"
+      >
+        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 top-full mt-1 w-72 bg-white rounded-lg shadow-lg border border-gray-200 z-50 py-1"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+        >
+          {/* Interview Link */}
+          {interviewUrl ? (
+            <div className="px-3 py-2 border-b border-gray-100">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1">Interview Link</p>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={interviewUrl}
+                  className="flex-1 text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1.5 text-gray-600 truncate"
+                  onFocus={(e) => e.target.select()}
+                />
+                <button
+                  onClick={handleCopy}
+                  className={`shrink-0 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+                    copied ? 'bg-green-100 text-green-700' : 'bg-primary-50 text-primary-700 hover:bg-primary-100'
+                  }`}
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="px-3 py-2 border-b border-gray-100">
+              <p className="text-xs text-gray-400">No interview created yet</p>
+            </div>
+          )}
+
+          {/* Delete */}
+          <button
+            onClick={handleDelete}
+            className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+              confirming
+                ? 'bg-red-50 text-red-700 font-medium'
+                : 'text-red-600 hover:bg-red-50'
+            }`}
+          >
+            {confirming ? 'Click again to confirm delete' : 'Delete client'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -45,8 +183,9 @@ export default function Dashboard() {
   const [clientList, setClientList] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-  useEffect(() => {
+  const loadData = () => {
     setLoading(true);
     Promise.all([
       dashboard.summary(),
@@ -55,7 +194,21 @@ export default function Dashboard() {
       setSummary(s);
       setClientList(c);
     }).finally(() => setLoading(false));
-  }, [statusFilter]);
+  };
+
+  useEffect(() => { loadData(); }, [statusFilter]);
+
+  const handleDelete = async (clientId: string) => {
+    try {
+      await clientsApi.delete(clientId);
+      setClientList((prev) => prev.filter((c) => c.id !== clientId));
+      if (summary) {
+        setSummary({ ...summary, totalClients: summary.totalClients - 1 });
+      }
+    } catch (e: any) {
+      alert('Failed to delete: ' + e.message);
+    }
+  };
 
   if (loading && !summary) return <div className="text-center py-12 text-gray-500">Loading...</div>;
 
@@ -66,7 +219,16 @@ export default function Dashboard() {
     { label: 'High Priority', value: summary?.highPriority ?? 0, color: 'bg-red-500' },
   ];
 
-  const statusOptions = ['', 'NEW', 'INTERVIEW_SENT', 'INTERVIEW_COMPLETE', 'REPORT_READY', 'ACTION_TAKEN', 'FOLLOW_UP', 'CLOSED'];
+  const statusOptions = [
+    { value: '', label: 'All Statuses' },
+    { value: 'NEW', label: 'New' },
+    { value: 'INTERVIEW_SENT', label: 'Interview Sent' },
+    { value: 'INTERVIEW_COMPLETE', label: 'Interview Complete' },
+    { value: 'REPORT_READY', label: 'Report Ready' },
+    { value: 'ACTION_TAKEN', label: 'Action Taken' },
+    { value: 'FOLLOW_UP', label: 'Follow Up' },
+    { value: 'CLOSED', label: 'Closed' },
+  ];
 
   return (
     <div>
@@ -96,9 +258,8 @@ export default function Dashboard() {
         <h2 className="text-lg font-medium text-gray-900">Clients</h2>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
           className="border border-gray-300 rounded-md px-3 py-1.5 text-sm">
-          <option value="">All statuses</option>
-          {statusOptions.filter(Boolean).map((s) => (
-            <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+          {statusOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
       </div>
@@ -110,109 +271,108 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="space-y-4">
-          {clientList.map((client: any) => (
-            <Link key={client.id} to={`/clients/${client.id}`}
-              className="block bg-white rounded-lg shadow hover:shadow-md transition-shadow">
-              <div className="p-5">
-                <div className="flex items-start justify-between">
-                  {/* Left: Name, contact, status badges */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-1">
-                      <h3 className="text-base font-semibold text-gray-900 truncate">{client.name}</h3>
-                      {client.classification && (
-                        <span className={`px-2 py-0.5 text-xs rounded-full font-medium shrink-0 ${classBg[client.classification] || 'bg-gray-100 text-gray-700'}`}>
-                          {classLabel[client.classification] || client.classification}
-                        </span>
-                      )}
-                      {client.interviewStatus && (
-                        <span className={`px-2 py-0.5 text-xs rounded-full shrink-0 ${interviewStatusColor[client.interviewStatus] || 'bg-gray-100 text-gray-600'}`}>
-                          {client.interviewStatus.replace(/_/g, ' ')}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      {[client.email, client.phone].filter(Boolean).join(' \u00B7 ') || 'No contact info'}
-                      {' \u00B7 '}
-                      {client.workflowStatus.replace(/_/g, ' ')}
-                      {' \u00B7 '}
-                      {new Date(client.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
+          {clientList.map((client: any) => {
+            const hasScore = client.buyerScore != null;
 
-                  {/* Right: Buyer Score */}
-                  <div className="text-right ml-4 shrink-0">
-                    {client.buyerScore != null ? (
-                      <>
-                        <p className="text-2xl font-bold text-green-600">{Math.round(client.buyerScore)}</p>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">Score</p>
-                      </>
-                    ) : client.interviewStatus === 'IN_PROGRESS' ? (
-                      <>
-                        <p className="text-2xl font-bold text-yellow-500">{Math.round(client.completionPercent)}%</p>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">Progress</p>
-                      </>
-                    ) : (
-                      <p className="text-sm text-gray-300">--</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Score bars (if scoring exists) */}
-                {client.scores && (
-                  <div className="mt-3 grid grid-cols-4 gap-3">
-                    {[
-                      { label: 'MOT', value: client.scores.motivation },
-                      { label: 'FIN', value: client.scores.financial },
-                      { label: 'TML', value: client.scores.timeline },
-                      { label: 'ENG', value: client.scores.engagement },
-                    ].map((s) => (
-                      <div key={s.label}>
-                        <div className="flex justify-between mb-0.5">
-                          <span className="text-[10px] text-gray-400 uppercase">{s.label}</span>
-                          <span className="text-[10px] font-medium text-gray-600">{Math.round(s.value)}</span>
-                        </div>
-                        <MiniBar value={s.value} />
+            return (
+              <div key={client.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
+                <div className="p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    {/* Left: Name, contact, status badges */}
+                    <Link to={`/clients/${client.id}`} className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-1 flex-wrap">
+                        <h3 className="text-base font-semibold text-gray-900 truncate">{client.name}</h3>
+                        {client.classification && (
+                          <span className={`px-2 py-0.5 text-xs rounded-full font-medium shrink-0 ${classBg[client.classification] || 'bg-gray-100 text-gray-700'}`}>
+                            {classLabel[client.classification] || client.classification}
+                          </span>
+                        )}
+                        {client.interviewStatus && (
+                          <span className={`px-2 py-0.5 text-xs rounded-full shrink-0 ${interviewStatusColor[client.interviewStatus] || 'bg-gray-100 text-gray-600'}`}>
+                            {interviewStatusLabel[client.interviewStatus] || client.interviewStatus}
+                          </span>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <p className="text-xs text-gray-500">
+                        {[client.email, client.phone].filter(Boolean).join(' · ') || 'No contact info'}
+                        {' · '}
+                        {workflowLabel[client.workflowStatus] || client.workflowStatus}
+                        {' · '}
+                        {new Date(client.createdAt).toLocaleDateString()}
+                      </p>
+                    </Link>
 
-                {/* Interview progress bar (if in progress, no scores yet) */}
-                {!client.scores && client.interviewStatus === 'IN_PROGRESS' && (
-                  <div className="mt-3">
-                    <div className="flex justify-between mb-0.5">
-                      <span className="text-[10px] text-gray-400 uppercase">Interview Progress</span>
-                      <span className="text-[10px] text-gray-500">{Math.round(client.completionPercent)}%</span>
+                    {/* Right: Buyer Score + Actions */}
+                    <div className="flex items-start gap-3 shrink-0">
+                      <div className="text-right">
+                        {hasScore ? (
+                          <>
+                            <p className={`text-2xl font-bold ${scoreColor(client.buyerScore)}`}>
+                              {Math.round(client.buyerScore)}
+                            </p>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wide">Buyer Score</p>
+                          </>
+                        ) : (
+                          <p className="text-sm text-gray-300 mt-1">--</p>
+                        )}
+                      </div>
+                      <ActionsMenu client={client} onDelete={handleDelete} />
                     </div>
-                    <MiniBar value={client.completionPercent} color="bg-yellow-400" />
                   </div>
-                )}
 
-                {/* Summary snippet */}
-                {client.summary && (
-                  <p className="mt-2 text-xs text-gray-500 line-clamp-2">{client.summary}</p>
-                )}
+                  <Link to={`/clients/${client.id}`}>
+                    {/* Score bars */}
+                    {client.scores && (
+                      <div className="mt-3 grid grid-cols-4 gap-3">
+                        <MiniBar label="Motivation" value={client.scores.motivation} />
+                        <MiniBar label="Financial" value={client.scores.financial} />
+                        <MiniBar label="Timeline" value={client.scores.timeline} />
+                        <MiniBar label="Engagement" value={client.scores.engagement} />
+                      </div>
+                    )}
 
-                {/* Action badges */}
-                <div className="mt-3 flex items-center gap-2">
-                  {client.recommendedAction && (
-                    <span className={`text-xs font-medium ${
-                      client.recommendedAction === 'SEND_TO_LENDER' ? 'text-green-600' :
-                      client.recommendedAction === 'SCHEDULE_CONSULTATION' ? 'text-blue-600' :
-                      'text-yellow-600'
-                    }`}>
-                      {client.recommendedAction === 'SEND_TO_LENDER' ? '\u2708 Send to lender' :
-                       client.recommendedAction === 'SCHEDULE_CONSULTATION' ? '\uD83D\uDCC5 Schedule consultation' :
-                       '\uD83D\uDD14 Follow up'}
-                    </span>
-                  )}
-                  {client.reportId && client.reportStatus === 'READY' && (
-                    <span className="text-xs text-green-600 font-medium">Report ready</span>
-                  )}
+                    {/* No signals — show interview progress */}
+                    {!client.scores && client.interviewStatus === 'IN_PROGRESS' && (
+                      <div className="mt-3">
+                        <div className="flex justify-between mb-0.5">
+                          <span className="text-[10px] text-gray-400 uppercase">Interview Progress</span>
+                          <span className="text-[10px] text-gray-500">{Math.round(client.completionPercent)}%</span>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-1.5">
+                          <div className="bg-yellow-400 h-1.5 rounded-full transition-all" style={{ width: `${client.completionPercent}%` }} />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Summary snippet */}
+                    {client.summary && (
+                      <p className="mt-2 text-xs text-gray-500 line-clamp-2">{client.summary}</p>
+                    )}
+
+                    {/* Action badges */}
+                    {(client.recommendedAction || (client.reportId && client.reportStatus === 'READY')) && (
+                      <div className="mt-3 flex items-center gap-2">
+                        {client.recommendedAction && (
+                          <span className={`text-xs font-medium ${
+                            client.recommendedAction === 'SEND_TO_LENDER' ? 'text-green-600' :
+                            client.recommendedAction === 'SCHEDULE_CONSULTATION' ? 'text-blue-600' :
+                            'text-yellow-600'
+                          }`}>
+                            {client.recommendedAction === 'SEND_TO_LENDER' ? '✈️ Send to lender' :
+                             client.recommendedAction === 'SCHEDULE_CONSULTATION' ? '📅 Schedule consultation' :
+                             '🔔 Follow up'}
+                          </span>
+                        )}
+                        {client.reportId && client.reportStatus === 'READY' && (
+                          <span className="text-xs text-green-600 font-medium">Report ready</span>
+                        )}
+                      </div>
+                    )}
+                  </Link>
                 </div>
               </div>
-            </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

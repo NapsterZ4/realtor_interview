@@ -112,8 +112,8 @@ export default function ReportView() {
       {/* Recommended Action */}
       <div className="border border-gray-200 rounded-xl p-5 mb-6 flex items-center gap-4 bg-gray-50">
         <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm text-xl">
-          {snap.recommendedAction === 'SEND_TO_LENDER' ? '\u2708' :
-           snap.recommendedAction === 'SCHEDULE_CONSULTATION' ? '\uD83D\uDCC5' : '\uD83D\uDD14'}
+          {snap.recommendedAction === 'SEND_TO_LENDER' ? '✈️' :
+           snap.recommendedAction === 'SCHEDULE_CONSULTATION' ? '📅' : '🔔'}
         </div>
         <div>
           <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Recommended Action</p>
@@ -133,7 +133,7 @@ export default function ReportView() {
 
       {/* Buyer Profile + Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <Card icon="\uD83D\uDCCB" title="Buyer Profile">
+        <Card icon="📋" title="Buyer Profile">
           <dl className="space-y-3 text-sm">
             <div className="flex">
               <dt className="text-gray-500 w-28 shrink-0">Type:</dt>
@@ -158,7 +158,7 @@ export default function ReportView() {
           </dl>
         </Card>
 
-        <Card icon="\uD83D\uDCDD" title="Summary">
+        <Card icon="📝" title="Summary">
           <p className="text-sm text-gray-600 leading-relaxed">{data.summary || 'No summary available.'}</p>
         </Card>
       </div>
@@ -171,13 +171,13 @@ export default function ReportView() {
           </pre>
         </Card>
 
-        <Card icon="\uD83D\uDD0D" title="MLS Criteria">
+        <Card icon="🔍" title="MLS Criteria">
           <pre className="text-xs text-gray-700 bg-gray-50 rounded-lg p-3 whitespace-pre-wrap font-mono">
 {JSON.stringify(data.mlsCriteria || {}, null, 2)}
           </pre>
         </Card>
 
-        <Card icon="\uD83D\uDCCD" title="Consultation Notes">
+        <Card icon="📍" title="Consultation Notes">
           <p className="text-sm text-gray-600 leading-relaxed">{data.consultationNotes || 'No notes available.'}</p>
         </Card>
       </div>

@@ -42,9 +42,14 @@ ${PILLAR_DESCRIPTIONS}
 ${signalsSummary}
 
 ## Completion Awareness
-- Once you have gathered meaningful information across all 5 pillars, set "interview_feels_complete" to true.
-- Don't rush - it's okay if the conversation takes several exchanges.
-- A complete interview typically covers: why they're buying, when, what they want, financial readiness, and their level of seriousness/engagement.
+- You are the sole authority on when the interview ends. When you set "interview_feels_complete" to true, the system will immediately close the interview and show the buyer their results.
+- Set "interview_feels_complete" to true ONLY when you are sending your final farewell/goodbye message to the buyer. This is when:
+  1. You have gathered enough meaningful information across the pillars to build a useful buyer profile.
+  2. The conversation has reached a natural conclusion — you've covered the key topics and the buyer has no more to add.
+  3. Your reply IS the closing message (e.g., "Thank you! Good luck with your search!" or "¡Buena suerte con tu búsqueda!").
+- Do NOT set it to true prematurely. Make sure you've explored the buyer's situation sufficiently first.
+- When you're ready to close, send a warm farewell message and set "interview_feels_complete" to true in the SAME response.
+- Don't rush - it's okay if the conversation takes several exchanges. A good interview typically covers: why they're buying, when, what they want, financial readiness, and their level of seriousness.
 
 ## Response Format
 You MUST respond with valid JSON matching this exact structure (no markdown, no code fences, just raw JSON):

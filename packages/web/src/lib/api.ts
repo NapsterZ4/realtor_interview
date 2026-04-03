@@ -53,6 +53,8 @@ export const clients = {
     request<{ client: any }>('/clients', { method: 'POST', body: JSON.stringify(data) }).then((d) => d.client),
   update: (id: string, data: Record<string, any>) =>
     request<{ client: any }>(`/clients/${id}`, { method: 'PATCH', body: JSON.stringify(data) }).then((d) => d.client),
+  delete: (id: string) =>
+    request<{ deleted: boolean }>(`/clients/${id}`, { method: 'DELETE' }),
 };
 
 // Interviews
