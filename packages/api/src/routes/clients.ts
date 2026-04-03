@@ -196,7 +196,7 @@ export default async function clientRoutes(app: FastifyInstance) {
     }
 
     // Delete in correct order to respect foreign keys
-    const sessionIds = existing.interviewSessions.map((s) => s.id);
+    const sessionIds = existing.interviewSessions.map((s: any) => s.id);
 
     if (sessionIds.length > 0) {
       await prisma.scoringResult.deleteMany({ where: { interviewSessionId: { in: sessionIds } } });

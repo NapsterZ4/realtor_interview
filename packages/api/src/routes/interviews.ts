@@ -620,7 +620,7 @@ export default async function interviewRoutes(app: FastifyInstance) {
           timelineScore: scores.timelineScore,
           buyerProbabilityScore: scores.buyerProbabilityScore,
           classification: scores.classification,
-          inputSignalSnapshot: latestSignals.map((s) => ({
+          inputSignalSnapshot: latestSignals.map((s: any) => ({
             signalKey: s.signalKey,
             signalCategory: s.signalCategory,
             signalValue: s.signalValue,
@@ -634,7 +634,7 @@ export default async function interviewRoutes(app: FastifyInstance) {
           timelineScore: scores.timelineScore,
           buyerProbabilityScore: scores.buyerProbabilityScore,
           classification: scores.classification,
-          inputSignalSnapshot: latestSignals.map((s) => ({
+          inputSignalSnapshot: latestSignals.map((s: any) => ({
             signalKey: s.signalKey,
             signalCategory: s.signalCategory,
             signalValue: s.signalValue,
