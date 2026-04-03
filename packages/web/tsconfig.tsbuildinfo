@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/layout.tsx","./src/lib/api.ts","./src/lib/auth-context.tsx","./src/pages/clientdetail.tsx","./src/pages/createclient.tsx","./src/pages/dashboard.tsx","./src/pages/interview.tsx","./src/pages/login.tsx","./src/pages/register.tsx","./src/pages/reportview.tsx"],"version":"5.9.3"}

@@ -1,0 +1,25 @@
+{
+  "name": "buyer-qualification-platform",
+  "private": true,
+  "scripts": {
+    "dev:api": "pnpm --filter @bqp/api dev",
+    "dev:web": "pnpm --filter @bqp/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "db:generate": "pnpm --filter @bqp/api db:generate",
+    "db:push": "pnpm --filter @bqp/api db:push",
+    "db:migrate": "pnpm --filter @bqp/api db:migrate"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "bcrypt",
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild"
+    ]
+  }
+}

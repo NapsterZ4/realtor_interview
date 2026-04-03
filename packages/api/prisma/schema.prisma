@@ -1,0 +1,190 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Realtor {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  phone        String?
+  company      String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  clients      Client[]
+}
+
+model Client {
+  id                String             @id @default(cuid())
+  realtorId         String
+  realtor           Realtor            @relation(fields: [realtorId], references: [id])
+  name              String
+  email             String?
+  phone             String?
+  leadSource        String?
+  preferredLanguage String             @default("en")
+  notes             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  interviewSessions InterviewSession[]
+  reports           Report[]
+  clientWorkflow    ClientWorkflow?
+
+  @@index([realtorId])
+}
+
+model InterviewSession {
+  id                String                 @id @default(cuid())
+  clientId          String
+  client            Client                 @relation(fields: [clientId], references: [id])
+  token             String                 @unique @default(cuid())
+  status            InterviewSessionStatus @default(PENDING)
+  expiresAt         DateTime
+  lockedAt          DateTime?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  lastActivityAt    DateTime?
+  completionPercent Float                  @default(0)
+  lastAnsweredPillar String?
+  timeSpentSeconds  Int                    @default(0)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  messages          InterviewMessage[]
+  extractedSignals  ExtractedSignal[]
+  scoringResult     ScoringResult?
+
+  @@index([clientId])
+  @@index([token])
+}
+
+enum InterviewSessionStatus {
+  PENDING
+  IN_PROGRESS
+  AWAITING_VALIDATION
+  COMPLETED
+  EXPIRED
+  ABANDONED
+}
+
+model InterviewMessage {
+  id                 String           @id @default(cuid())
+  interviewSessionId String
+  interviewSession   InterviewSession @relation(fields: [interviewSessionId], references: [id])
+  role               MessageRole
+  content            String
+  pillar             String?
+  sequenceNumber     Int
+  createdAt          DateTime         @default(now())
+
+  @@index([interviewSessionId])
+}
+
+enum MessageRole {
+  SYSTEM
+  ASSISTANT
+  USER
+}
+
+model ExtractedSignal {
+  id                 String           @id @default(cuid())
+  interviewSessionId String
+  interviewSession   InterviewSession @relation(fields: [interviewSessionId], references: [id])
+  signalCategory     SignalCategory
+  signalKey          String
+  signalValue        String
+  confidence         Float            @default(1.0)
+  sourceMessageId    String?
+  version            Int              @default(1)
+  supersededById     String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([interviewSessionId])
+  @@index([signalKey])
+}
+
+enum SignalCategory {
+  BUYER_IDENTITY
+  BUYER_MOTIVATION
+  PROPERTY_PREFERENCE
+  FINANCIAL_READINESS
+  BEHAVIORAL
+  TIMELINE
+  ENGAGEMENT
+}
+
+model ScoringResult {
+  id                    String              @id @default(cuid())
+  interviewSessionId    String              @unique
+  interviewSession      InterviewSession    @relation(fields: [interviewSessionId], references: [id])
+  motivationScore       Float
+  financialReadiness    Float
+  engagementScore       Float
+  timelineScore         Float
+  buyerProbabilityScore Float
+  classification        BuyerClassification
+  calculatedAt          DateTime            @default(now())
+  inputSignalSnapshot   Json
+}
+
+enum BuyerClassification {
+  RESEARCH_STAGE
+  EARLY_BUYER
+  ACTIVE_BUYER
+  HIGH_PROBABILITY
+}
+
+model Report {
+  id             String       @id @default(cuid())
+  clientId       String
+  client         Client       @relation(fields: [clientId], references: [id])
+  status         ReportStatus @default(PENDING)
+  reportData     Json?
+  lenderSnapshot Json?
+  generatedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([clientId])
+}
+
+enum ReportStatus {
+  PENDING
+  GENERATING
+  READY
+  EXPORTED
+  ERROR
+}
+
+model ClientWorkflow {
+  id                String             @id @default(cuid())
+  clientId          String             @unique
+  client            Client             @relation(fields: [clientId], references: [id])
+  status            WorkflowStatus     @default(NEW)
+  recommendedAction RecommendedAction?
+  actionExecutedAt  DateTime?
+  actionNotes       String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+enum WorkflowStatus {
+  NEW
+  INTERVIEW_SENT
+  INTERVIEW_COMPLETE
+  REPORT_READY
+  ACTION_TAKEN
+  FOLLOW_UP
+  CLOSED
+}
+
+enum RecommendedAction {
+  SEND_TO_LENDER
+  SCHEDULE_CONSULTATION
+  ADD_TO_FOLLOW_UP
+}
