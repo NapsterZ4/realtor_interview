@@ -24,6 +24,7 @@ export function registerAuthDecorator(app: FastifyInstance): void {
         reply.status(401).send({
           success: false,
           error: { code: 401, message: 'Unauthorized' },
+
         });
       }
     }

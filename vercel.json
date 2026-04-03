@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "buildCommand": "pnpm install && cd packages/api && npx prisma generate && cd ../.. && pnpm -r build",
+  "outputDirectory": "packages/web/dist",
+  "functions": {
+    "api/index.ts": {
+      "memory": 1024,
+      "maxDuration": 30,
+      "includeFiles": "packages/api/dist/**"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
