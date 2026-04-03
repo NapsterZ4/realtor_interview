@@ -175,7 +175,7 @@ export default async function reportRoutes(app: FastifyInstance) {
       },
     });
 
-    const signalData = signals.map((s) => ({
+    const signalData = signals.map((s: any) => ({
       signalKey: s.signalKey,
       signalValue: s.signalValue,
       confidence: s.confidence,
@@ -207,16 +207,16 @@ export default async function reportRoutes(app: FastifyInstance) {
     };
 
     // Override with derived scores if explicit ones not present
-    if (!signalData.find((s) => s.signalKey === 'motivation_score')) {
+    if (!signalData.find((s: any) => s.signalKey === 'motivation_score')) {
       scoringInput.motivationScore = avgScore(SignalCategory.BUYER_MOTIVATION);
     }
-    if (!signalData.find((s) => s.signalKey === 'financial_readiness_score')) {
+    if (!signalData.find((s: any) => s.signalKey === 'financial_readiness_score')) {
       scoringInput.financialReadiness = avgScore(SignalCategory.FINANCIAL_READINESS);
     }
-    if (!signalData.find((s) => s.signalKey === 'engagement_score')) {
+    if (!signalData.find((s: any) => s.signalKey === 'engagement_score')) {
       scoringInput.engagementScore = avgScore(SignalCategory.ENGAGEMENT);
     }
-    if (!signalData.find((s) => s.signalKey === 'timeline_score')) {
+    if (!signalData.find((s: any) => s.signalKey === 'timeline_score')) {
       scoringInput.timelineScore = avgScore(SignalCategory.TIMELINE);
     }
 

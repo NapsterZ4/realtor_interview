@@ -75,7 +75,7 @@ function buildBuyerStrategy(
   if (propertyType) propParts.push(propertyType);
   if (bedrooms) propParts.push(`${bedrooms} bed`);
   if (bathrooms) propParts.push(`${bathrooms} bath`);
-  const propertyLine = propParts.join(' \u00B7 ') || propertyType;
+  const propertyLine = propParts.join(' · ') || propertyType;
 
   // Preferences note
   let preferencesNote = '';
@@ -431,12 +431,12 @@ export default async function interviewRoutes(app: FastifyInstance) {
       },
     });
 
-    const history = messages.map((m) => ({
+    const history = messages.map((m: any) => ({
       role: m.role,
       content: m.content,
     }));
 
-    const signalContext = signals.map((s) => ({
+    const signalContext = signals.map((s: any) => ({
       signalKey: s.signalKey,
       signalCategory: s.signalCategory,
       signalValue: s.signalValue,
@@ -516,7 +516,7 @@ export default async function interviewRoutes(app: FastifyInstance) {
       }
     }
 
-    // Reload latest signals for completion check
+    // Reload latest signals for progress tracking
     const latestSignals = await prisma.extractedSignal.findMany({
       where: {
         interviewSessionId: session.id,
@@ -525,7 +525,7 @@ export default async function interviewRoutes(app: FastifyInstance) {
     });
 
     const completionResult = checkCompletion(
-      latestSignals.map((s) => ({
+      latestSignals.map((s: any) => ({
         signalKey: s.signalKey,
         signalCategory: s.signalCategory,
         confidence: s.confidence,
@@ -539,9 +539,9 @@ export default async function interviewRoutes(app: FastifyInstance) {
       lastAnsweredPillar: aiResponse.current_pillar,
     };
 
-    // If complete -> transition to AWAITING_VALIDATION -> COMPLETED
-    // Backend is sole authority - AI's interview_feels_complete is advisory only
-    if (completionResult.isComplete) {
+    // Completion is driven by the LLM's decision (interview_feels_complete),
+    // NOT by signal-based rules. The progress bar is just visual feedback.
+    if (aiResponse.interview_feels_complete) {
       const canAwait = validateTransition(
         'interview',
         InterviewSessionStatus.IN_PROGRESS,
@@ -588,6 +588,60 @@ export default async function interviewRoutes(app: FastifyInstance) {
           });
         }
       }
+
+      // Auto-calculate buyer score on completion
+      const categoryScores: Record<string, number[]> = {};
+      for (const s of latestSignals) {
+        if (!categoryScores[s.signalCategory]) {
+          categoryScores[s.signalCategory] = [];
+        }
+        categoryScores[s.signalCategory].push(s.confidence * 100);
+      }
+      const avgCat = (cat: string) => {
+        const vals = categoryScores[cat];
+        if (!vals || vals.length === 0) return 50;
+        return vals.reduce((a, b) => a + b, 0) / vals.length;
+      };
+
+      const scores = calculateScore({
+        motivationScore: avgCat(SignalCategory.BUYER_MOTIVATION),
+        financialReadiness: avgCat(SignalCategory.FINANCIAL_READINESS),
+        engagementScore: avgCat(SignalCategory.ENGAGEMENT),
+        timelineScore: avgCat(SignalCategory.TIMELINE),
+      });
+
+      await prisma.scoringResult.upsert({
+        where: { interviewSessionId: session.id },
+        create: {
+          interviewSessionId: session.id,
+          motivationScore: scores.motivationScore,
+          financialReadiness: scores.financialReadiness,
+          engagementScore: scores.engagementScore,
+          timelineScore: scores.timelineScore,
+          buyerProbabilityScore: scores.buyerProbabilityScore,
+          classification: scores.classification,
+          inputSignalSnapshot: latestSignals.map((s) => ({
+            signalKey: s.signalKey,
+            signalCategory: s.signalCategory,
+            signalValue: s.signalValue,
+            confidence: s.confidence,
+          })) as any,
+        },
+        update: {
+          motivationScore: scores.motivationScore,
+          financialReadiness: scores.financialReadiness,
+          engagementScore: scores.engagementScore,
+          timelineScore: scores.timelineScore,
+          buyerProbabilityScore: scores.buyerProbabilityScore,
+          classification: scores.classification,
+          inputSignalSnapshot: latestSignals.map((s) => ({
+            signalKey: s.signalKey,
+            signalCategory: s.signalCategory,
+            signalValue: s.signalValue,
+            confidence: s.confidence,
+          })) as any,
+        },
+      });
 
       // Build buyer-facing strategy from signals
       buyerStrategy = buildBuyerStrategy(latestSignals, session.client.name);

@@ -174,4 +174,47 @@ export default async function clientRoutes(app: FastifyInstance) {
       data: { client },
     });
   });
+
+  app.delete('/clients/:id', async (request, reply) => {
+    const { id: realtorId } = request.user as { id: string };
+    const { id } = request.params as { id: string };
+
+    const existing = await prisma.client.findFirst({
+      where: { id, realtorId },
+      include: {
+        interviewSessions: { select: { id: true } },
+        reports: { select: { id: true } },
+        clientWorkflow: { select: { id: true } },
+      },
+    });
+
+    if (!existing) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 404, message: 'Client not found' },
+      });
+    }
+
+    // Delete in correct order to respect foreign keys
+    const sessionIds = existing.interviewSessions.map((s) => s.id);
+
+    if (sessionIds.length > 0) {
+      await prisma.scoringResult.deleteMany({ where: { interviewSessionId: { in: sessionIds } } });
+      await prisma.extractedSignal.deleteMany({ where: { interviewSessionId: { in: sessionIds } } });
+      await prisma.interviewMessage.deleteMany({ where: { interviewSessionId: { in: sessionIds } } });
+      await prisma.interviewSession.deleteMany({ where: { id: { in: sessionIds } } });
+    }
+
+    if (existing.reports.length > 0) {
+      await prisma.report.deleteMany({ where: { clientId: id } });
+    }
+
+    if (existing.clientWorkflow) {
+      await prisma.clientWorkflow.delete({ where: { id: existing.clientWorkflow.id } });
+    }
+
+    await prisma.client.delete({ where: { id } });
+
+    return reply.send({ success: true, data: { deleted: true } });
+  });
 }
