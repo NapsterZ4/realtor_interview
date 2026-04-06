@@ -3,8 +3,8 @@ import { z } from 'zod';
 import prisma from '../lib/prisma';
 
 const createClientSchema = z.object({
-  name: z.string().min(1),
-  email: z.string().email().optional(),
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Please enter a valid email address').optional().or(z.literal('')),
   phone: z.string().optional(),
   leadSource: z.string().optional(),
   preferredLanguage: z.string().optional(),
@@ -12,8 +12,8 @@ const createClientSchema = z.object({
 });
 
 const updateClientSchema = z.object({
-  name: z.string().min(1).optional(),
-  email: z.string().email().optional(),
+  name: z.string().min(1, 'Name is required').optional(),
+  email: z.string().email('Please enter a valid email address').optional().or(z.literal('')),
   phone: z.string().optional(),
   leadSource: z.string().optional(),
   preferredLanguage: z.string().optional(),

@@ -93,7 +93,7 @@ export default function CreateClient() {
   return (
     <div className="max-w-lg mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Create New Client</h1>
-      <form className="bg-white rounded-lg shadow p-6 space-y-4" onSubmit={handleSubmit}>
+      <form className="bg-white rounded-lg shadow p-6 space-y-4" onSubmit={handleSubmit} noValidate>
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">{error}</div>
         )}
