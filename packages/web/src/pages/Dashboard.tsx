@@ -330,6 +330,26 @@ export default function Dashboard() {
 
                     {/* Right: Buyer Score + Actions */}
                     <div className="flex items-start gap-3 shrink-0">
+                      <div className="min-w-[130px]">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Status</p>
+                        <select
+                          value={client.pipelineStatus || 'SENT'}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onChange={(e) => {
+                            const next = e.target.value as 'SENT' | 'ANSWERED' | 'FOLLOW_UP';
+                            handleSetStatus(client.id, next);
+                          }}
+                          className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs bg-white"
+                        >
+                          <option value="SENT">Sent</option>
+                          <option value="ANSWERED">Answered</option>
+                          <option value="FOLLOW_UP">Follow Up</option>
+                        </select>
+                      </div>
+
                       <div className="text-right">
                         {hasScore ? (
                           <>
