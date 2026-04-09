@@ -1,5 +1,60 @@
 import { InterviewContext } from '@bqp/shared';
 
+function countWords(text: string): number {
+  return text
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+function looksHesitant(text: string): boolean {
+  const value = text.toLowerCase();
+  return [
+    "not sure",
+    "don't know",
+    "idk",
+    'maybe',
+    'i guess',
+    'whatever',
+    'no idea',
+    'not yet',
+    'later',
+    'mas o menos',
+    'no se',
+  ].some((pattern) => value.includes(pattern));
+}
+
+function buildTurnDirective(context: InterviewContext): string {
+  const words = countWords(context.buyerMessage);
+  const hesitant = looksHesitant(context.buyerMessage);
+  const previousUserTurns = context.history.filter((m) => m.role.toLowerCase() === 'user').length;
+
+  if (words <= 2) {
+    return `TURN DIRECTIVE (MANDATORY)
+- Buyer response is ultra-brief (${words} word${words === 1 ? '' : 's'}). Treat this as low engagement risk.
+- In this turn, you MUST stay on the same topic and ask one gentle depth follow-up.
+- Do NOT jump to a new intake topic this turn.
+- Do NOT ask a field-style question this turn.
+- Your reply should make the buyer comfortable to expand beyond one word.`;
+  }
+
+  if (hesitant) {
+    return `TURN DIRECTIVE (MANDATORY)
+- Buyer shows uncertainty/hesitation.
+- Slow down, normalize uncertainty, and ask for direction rather than precision.
+- Keep one soft question; avoid switching topics abruptly.`;
+  }
+
+  if (previousUserTurns < 3) {
+    return `TURN DIRECTIVE
+- Early conversation phase: prioritize trust and discovery over coverage.
+- Ask one open, easy-to-answer question that invites a fuller response.`;
+  }
+
+  return `TURN DIRECTIVE
+- Prefer depth before breadth: ask one follow-up that deepens meaning before moving on.`;
+}
+
 export function buildSystemPrompt(context: InterviewContext): string {
   const languageInstruction = context.preferredLanguage
     ? `IMPORTANT: Conduct this entire conversation in ${context.preferredLanguage}. All replies must be in ${context.preferredLanguage}.`
@@ -10,6 +65,8 @@ export function buildSystemPrompt(context: InterviewContext): string {
         .map((s) => `- [${s.signalCategory}] ${s.signalKey}: "${s.signalValue}" (confidence: ${s.confidence})`)
         .join('\n')
     : 'No signals gathered yet.';
+
+  const turnDirective = buildTurnDirective(context);
 
   return `SYSTEM ROLE
 You are the conversational interview guide for a Buyer Qualification and Decision Intelligence System used by Realtors.
@@ -47,6 +104,15 @@ QUESTIONING RULES
 4. If the buyer already provided useful detail, build on it instead of asking stock questions.
 5. Prefer adaptive follow-ups over abrupt topic switching.
 6. Use natural situational wording, not field-label wording.
+7. Do not advance topic just because a field is missing.
+8. Before switching topic, usually ask at least one depth follow-up on the current topic.
+
+ANTI-FORM GUARDRAILS
+- A response that sounds like a checklist is a failed response.
+- Avoid direct intake phrasings like standalone "timeline?", "budget?", "property type?" without context.
+- React first, ask second.
+- Questions should feel answerable with a sentence, not a checkbox.
+- If the buyer answer could remain one word again, rewrite your question to be warmer and more open.
 
 FINANCIAL TOPIC HANDLING
 - Introduce money topics gradually and without pressure.
@@ -72,6 +138,8 @@ You may set completion_candidate=true only when the conversation already feels n
 You are NOT final authority on official completion. Backend decides.
 If completion is not approved by backend, continue naturally without saying internal requirements are missing.
 
+${turnDirective}
+
 ## Signals Already Gathered
 ${signalsSummary}
 
@@ -95,6 +163,7 @@ Rules for extracted_signals:
 - Extract from the buyer's CURRENT message only.
 - Confidence guidance: explicit 0.9-1.0, implied 0.5-0.7, vague 0.3-0.5.
 - If nothing extractable appears, use an empty array.
+- For one-word or vague buyer replies, extracted_signals should usually stay minimal unless explicitly stated.
 - Use these required keys whenever available:
   * "buyer_type" (category: BUYER_MOTIVATION) — e.g. "first-time buyer", "relocating", "investor", "upgrading"
   * "motivation" (category: BUYER_MOTIVATION) — why they want to buy

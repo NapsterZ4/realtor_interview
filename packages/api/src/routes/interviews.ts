@@ -19,6 +19,10 @@ const INTERVIEW_EXPIRY_DAYS = parseInt(
   10
 );
 const APP_URL = process.env.APP_URL ?? 'http://localhost:5173';
+const MIN_BUYER_TURNS_FOR_COMPLETION = parseInt(
+  process.env.MIN_BUYER_TURNS_FOR_COMPLETION ?? '6',
+  10
+);
 
 const messageSchema = z.object({
   message: z.string().min(1),
@@ -532,6 +536,11 @@ export default async function interviewRoutes(app: FastifyInstance) {
       }))
     );
 
+    const priorBuyerTurns = messages.filter((m: any) => m.role === MessageRole.USER).length;
+    const buyerTurnsIncludingCurrent = priorBuyerTurns + 1;
+    const meetsMinimumConversationDepth =
+      buyerTurnsIncludingCurrent >= MIN_BUYER_TURNS_FOR_COMPLETION;
+
     // Update session
     const updateData: Record<string, unknown> = {
       completionPercent: completionResult.completionPercent,
@@ -542,7 +551,7 @@ export default async function interviewRoutes(app: FastifyInstance) {
     // Completion authority is backend-only.
     // The model can suggest completion through completion_candidate, but
     // official completion is decided by signal-based rules here.
-    if (completionResult.isComplete) {
+    if (completionResult.isComplete && meetsMinimumConversationDepth) {
       const canAwait = validateTransition(
         'interview',
         InterviewSessionStatus.IN_PROGRESS,
@@ -564,6 +573,9 @@ export default async function interviewRoutes(app: FastifyInstance) {
           updateData.completedAt = new Date();
         }
       }
+    } else if (completionResult.isComplete && !meetsMinimumConversationDepth) {
+      // Keep the interview open long enough to build trust and depth.
+      updateData.completionPercent = 95;
     }
 
     await prisma.interviewSession.update({
