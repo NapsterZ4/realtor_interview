@@ -208,18 +208,20 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const loadData = () => {
+  const loadData = async () => {
     setLoading(true);
-    Promise.all([
+    const [s, c] = await Promise.all([
       dashboard.summary(),
       dashboard.clients(statusFilter || undefined),
-    ]).then(([s, c]) => {
-      setSummary(s);
-      setClientList(c);
-    }).finally(() => setLoading(false));
+    ]);
+    setSummary(s);
+    setClientList(c);
+    setLoading(false);
   };
 
-  useEffect(() => { loadData(); }, [statusFilter]);
+  useEffect(() => {
+    loadData().catch(() => setLoading(false));
+  }, [statusFilter]);
 
   const handleDelete = async (clientId: string) => {
     try {
@@ -236,7 +238,7 @@ export default function Dashboard() {
   const handleSetStatus = async (clientId: string, status: 'SENT' | 'ANSWERED' | 'FOLLOW_UP' | 'CLOSED') => {
     try {
       await workflowApi.setStatus(clientId, status);
-      loadData();
+      await loadData();
     } catch (e: any) {
       alert('Failed to update status: ' + e.message);
     }

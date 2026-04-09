@@ -9,6 +9,8 @@ async function request<T>(
   options: RequestOptions = {}
 ): Promise<T> {
   const { skipAuth = false, ...fetchOptions } = options;
+  const method = (fetchOptions.method || 'GET').toUpperCase();
+  const isGet = method === 'GET';
   const token = localStorage.getItem('token');
   const headers: Record<string, string> = {
     ...((fetchOptions.headers as Record<string, string>) || {}),
@@ -24,7 +26,9 @@ async function request<T>(
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...fetchOptions,
+      method,
       headers,
+      cache: isGet ? 'no-store' : fetchOptions.cache,
     });
   } catch (err: any) {
     if (err instanceof TypeError) {
