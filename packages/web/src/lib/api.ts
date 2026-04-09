@@ -105,6 +105,11 @@ export const workflow = {
     request<{ workflow: any }>(`/clients/${clientId}/workflow`).then((d) => d.workflow),
   execute: (clientId: string, notes?: string) =>
     request<{ workflow: any }>(`/clients/${clientId}/workflow/execute`, { method: 'POST', body: JSON.stringify({ actionNotes: notes ?? '' }) }).then((d) => d.workflow),
+  setStatus: (clientId: string, status: 'SENT' | 'ANSWERED' | 'FOLLOW_UP') =>
+    request<{ workflow: any }>(`/clients/${clientId}/workflow/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }).then((d) => d.workflow),
 };
 
 // Dashboard

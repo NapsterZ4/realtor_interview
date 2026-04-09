@@ -6,7 +6,10 @@ import {
   BuyerClassification,
   SignalCategory,
   calculateScore,
+  WorkflowStatus,
 } from '@bqp/shared';
+
+type DashboardPipelineStatus = 'SENT' | 'ANSWERED' | 'FOLLOW_UP';
 
 function computeScoreFromSignals(
   signals: Array<{ signalCategory: string; confidence: number }>
@@ -30,6 +33,31 @@ function computeScoreFromSignals(
     engagementScore: avg(SignalCategory.ENGAGEMENT),
     timelineScore: avg(SignalCategory.TIMELINE),
   });
+}
+
+function mapToPipelineStatus(params: {
+  workflowStatus?: string | null;
+  interviewStatus?: string | null;
+}): DashboardPipelineStatus {
+  const { workflowStatus, interviewStatus } = params;
+
+  if (workflowStatus === WorkflowStatus.FOLLOW_UP) {
+    return 'FOLLOW_UP';
+  }
+
+  const buyerHasAnswered = Boolean(
+    interviewStatus &&
+      ![
+        InterviewSessionStatus.PENDING,
+        InterviewSessionStatus.EXPIRED,
+      ].includes(interviewStatus as InterviewSessionStatus)
+  );
+
+  if (buyerHasAnswered) {
+    return 'ANSWERED';
+  }
+
+  return 'SENT';
 }
 
 export default async function dashboardRoutes(app: FastifyInstance) {
@@ -81,10 +109,6 @@ export default async function dashboardRoutes(app: FastifyInstance) {
     const { status } = request.query as { status?: string };
 
     const where: Record<string, unknown> = { realtorId };
-
-    if (status) {
-      where.clientWorkflow = { status };
-    }
 
     const clients = await prisma.client.findMany({
       where,
@@ -183,12 +207,20 @@ export default async function dashboardRoutes(app: FastifyInstance) {
         summary: reportData?.summary ?? null,
         reportId: report?.id ?? null,
         reportStatus: report?.status ?? null,
+        pipelineStatus: mapToPipelineStatus({
+          workflowStatus: client.clientWorkflow?.status,
+          interviewStatus: session?.status,
+        }),
       };
     });
 
+    const filtered = status
+      ? result.filter((client) => client.pipelineStatus === status)
+      : result;
+
     return reply.send({
       success: true,
-      data: { clients: result },
+      data: { clients: filtered },
     });
   });
 }

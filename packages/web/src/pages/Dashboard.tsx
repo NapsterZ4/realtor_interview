@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { dashboard, clients as clientsApi } from '../lib/api';
+import { Link } from 'react-router-dom';
+import { dashboard, clients as clientsApi, workflow as workflowApi } from '../lib/api';
 
 interface Summary {
   totalClients: number;
@@ -23,32 +23,16 @@ const classBg: Record<string, string> = {
   RESEARCH_STAGE: 'bg-gray-100 text-gray-700',
 };
 
-const workflowLabel: Record<string, string> = {
-  NEW: 'New',
-  INTERVIEW_SENT: 'Interview Sent',
-  INTERVIEW_COMPLETE: 'Interview Complete',
-  REPORT_READY: 'Report Ready',
-  ACTION_TAKEN: 'Action Taken',
+const pipelineStatusLabel: Record<string, string> = {
+  SENT: 'Sent',
+  ANSWERED: 'Answered',
   FOLLOW_UP: 'Follow Up',
-  CLOSED: 'Closed',
 };
 
-const interviewStatusLabel: Record<string, string> = {
-  PENDING: 'Pending',
-  IN_PROGRESS: 'In Progress',
-  AWAITING_VALIDATION: 'Validating',
-  COMPLETED: 'Completed',
-  EXPIRED: 'Expired',
-  ABANDONED: 'Abandoned',
-};
-
-const interviewStatusColor: Record<string, string> = {
-  PENDING: 'bg-gray-100 text-gray-600',
-  IN_PROGRESS: 'bg-yellow-100 text-yellow-700',
-  AWAITING_VALIDATION: 'bg-blue-100 text-blue-700',
-  COMPLETED: 'bg-green-100 text-green-700',
-  EXPIRED: 'bg-red-100 text-red-600',
-  ABANDONED: 'bg-orange-100 text-orange-700',
+const pipelineStatusColor: Record<string, string> = {
+  SENT: 'bg-blue-100 text-blue-700',
+  ANSWERED: 'bg-green-100 text-green-700',
+  FOLLOW_UP: 'bg-amber-100 text-amber-700',
 };
 
 function scoreColor(score: number): string {
@@ -79,10 +63,19 @@ function MiniBar({ value, label }: { value: number; label: string }) {
   );
 }
 
-function ActionsMenu({ client, onDelete }: { client: any; onDelete: (id: string) => void }) {
+function ActionsMenu({
+  client,
+  onDelete,
+  onSetStatus,
+}: {
+  client: any;
+  onDelete: (id: string) => void;
+  onSetStatus: (id: string, status: 'SENT' | 'ANSWERED' | 'FOLLOW_UP') => Promise<void>;
+}) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -115,6 +108,18 @@ function ActionsMenu({ client, onDelete }: { client: any; onDelete: (id: string)
     onDelete(client.id);
     setOpen(false);
     setConfirming(false);
+  };
+
+  const handleSetStatus = async (status: 'SENT' | 'ANSWERED' | 'FOLLOW_UP') => {
+    if (updatingStatus) return;
+    setUpdatingStatus(true);
+    try {
+      await onSetStatus(client.id, status);
+      setOpen(false);
+      setConfirming(false);
+    } finally {
+      setUpdatingStatus(false);
+    }
   };
 
   return (
@@ -162,6 +167,23 @@ function ActionsMenu({ client, onDelete }: { client: any; onDelete: (id: string)
           )}
 
           {/* Delete */}
+          <div className="px-3 py-2 border-b border-gray-100">
+            <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1.5">Set Status</p>
+            <div className="flex flex-col gap-1">
+              {(['SENT', 'ANSWERED', 'FOLLOW_UP'] as const).map((status) => (
+                <button
+                  key={status}
+                  disabled={updatingStatus}
+                  onClick={() => handleSetStatus(status)}
+                  className="w-full text-left px-2 py-1.5 rounded text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  {pipelineStatusLabel[status]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Delete */}
           <button
             onClick={handleDelete}
             className={`w-full text-left px-3 py-2 text-sm transition-colors ${
@@ -183,7 +205,6 @@ export default function Dashboard() {
   const [clientList, setClientList] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
 
   const loadData = () => {
     setLoading(true);
@@ -210,6 +231,15 @@ export default function Dashboard() {
     }
   };
 
+  const handleSetStatus = async (clientId: string, status: 'SENT' | 'ANSWERED' | 'FOLLOW_UP') => {
+    try {
+      await workflowApi.setStatus(clientId, status);
+      loadData();
+    } catch (e: any) {
+      alert('Failed to update status: ' + e.message);
+    }
+  };
+
   if (loading && !summary) return <div className="text-center py-12 text-gray-500">Loading...</div>;
 
   const cards = [
@@ -221,13 +251,9 @@ export default function Dashboard() {
 
   const statusOptions = [
     { value: '', label: 'All Statuses' },
-    { value: 'NEW', label: 'New' },
-    { value: 'INTERVIEW_SENT', label: 'Interview Sent' },
-    { value: 'INTERVIEW_COMPLETE', label: 'Interview Complete' },
-    { value: 'REPORT_READY', label: 'Report Ready' },
-    { value: 'ACTION_TAKEN', label: 'Action Taken' },
+    { value: 'SENT', label: 'Sent' },
+    { value: 'ANSWERED', label: 'Answered' },
     { value: 'FOLLOW_UP', label: 'Follow Up' },
-    { value: 'CLOSED', label: 'Closed' },
   ];
 
   return (
@@ -287,16 +313,16 @@ export default function Dashboard() {
                             {classLabel[client.classification] || client.classification}
                           </span>
                         )}
-                        {client.interviewStatus && (
-                          <span className={`px-2 py-0.5 text-xs rounded-full shrink-0 ${interviewStatusColor[client.interviewStatus] || 'bg-gray-100 text-gray-600'}`}>
-                            {interviewStatusLabel[client.interviewStatus] || client.interviewStatus}
+                        {client.pipelineStatus && (
+                          <span className={`px-2 py-0.5 text-xs rounded-full shrink-0 ${pipelineStatusColor[client.pipelineStatus] || 'bg-gray-100 text-gray-600'}`}>
+                            {pipelineStatusLabel[client.pipelineStatus] || client.pipelineStatus}
                           </span>
                         )}
                       </div>
                       <p className="text-xs text-gray-500">
                         {[client.email, client.phone].filter(Boolean).join(' · ') || 'No contact info'}
                         {' · '}
-                        {workflowLabel[client.workflowStatus] || client.workflowStatus}
+                        {pipelineStatusLabel[client.pipelineStatus] || client.pipelineStatus || 'Sent'}
                         {' · '}
                         {new Date(client.createdAt).toLocaleDateString()}
                       </p>
@@ -316,7 +342,7 @@ export default function Dashboard() {
                           <p className="text-sm text-gray-300 mt-1">--</p>
                         )}
                       </div>
-                      <ActionsMenu client={client} onDelete={handleDelete} />
+                      <ActionsMenu client={client} onDelete={handleDelete} onSetStatus={handleSetStatus} />
                     </div>
                   </div>
 
