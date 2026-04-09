@@ -34,6 +34,38 @@ function buildFallbackResponse(): AIResponse {
   };
 }
 
+function extractJsonObject(raw: string): unknown | null {
+  const trimmed = raw.trim();
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // Continue to looser extraction below.
+  }
+
+  const codeFenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (codeFenceMatch?.[1]) {
+    try {
+      return JSON.parse(codeFenceMatch[1].trim());
+    } catch {
+      // Continue to brace extraction.
+    }
+  }
+
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    const candidate = trimmed.slice(start, end + 1);
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 function isValidSignal(signal: unknown): signal is ExtractedSignalInput {
   if (typeof signal !== 'object' || signal === null) return false;
   const s = signal as Record<string, unknown>;
@@ -147,45 +179,119 @@ export class InterviewAIEngine {
   }
 
   async processMessage(context: InterviewContext): Promise<AIResponse> {
-    try {
-      const messages = buildMessageHistory(context);
+    const messages = buildMessageHistory(context);
+    const prefersCompletionTokens = this.model.startsWith('gpt-5');
 
-      const completion = await this.client.chat.completions.create({
-        model: this.model,
+    try {
+      const completion = await this.createChatCompletion(
         messages,
-        max_tokens: this.maxTokens,
-        temperature: this.temperature,
-        response_format: { type: 'json_object' },
-      });
+        true,
+        prefersCompletionTokens
+      );
 
       const content = completion.choices?.[0]?.message?.content;
 
       if (!content) {
-        console.error('AI engine: empty response from OpenAI');
+        console.error('AI engine: empty structured response from OpenAI, retrying unstructured');
+        return this.retryWithoutResponseFormat(messages, prefersCompletionTokens);
+      }
+
+      return this.parseResponse(content);
+    } catch (error) {
+      console.error('AI engine: structured request failed, retrying unstructured', {
+        model: this.model,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return this.retryWithoutResponseFormat(messages, prefersCompletionTokens);
+    }
+  }
+
+  private async createChatCompletion(
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    structured: boolean,
+    useCompletionTokens: boolean
+  ) {
+    const request: Record<string, unknown> = {
+      model: this.model,
+      messages,
+      temperature: this.temperature,
+    };
+
+    if (useCompletionTokens) {
+      request.max_completion_tokens = this.maxTokens;
+    } else {
+      request.max_tokens = this.maxTokens;
+    }
+
+    if (structured) {
+      request.response_format = { type: 'json_object' };
+    }
+
+    try {
+      return await this.client.chat.completions.create(request as any);
+    } catch (error) {
+      if (
+        this.isUnsupportedParam(error, useCompletionTokens ? 'max_completion_tokens' : 'max_tokens')
+      ) {
+        const fallbackRequest: Record<string, unknown> = {
+          ...request,
+        };
+        delete fallbackRequest[useCompletionTokens ? 'max_completion_tokens' : 'max_tokens'];
+        fallbackRequest[useCompletionTokens ? 'max_tokens' : 'max_completion_tokens'] = this.maxTokens;
+
+        return this.client.chat.completions.create(fallbackRequest as any);
+      }
+
+      throw error;
+    }
+  }
+
+  private isUnsupportedParam(error: unknown, param: string): boolean {
+    if (!error || typeof error !== 'object') return false;
+    const e = error as Record<string, unknown>;
+    return e.code === 'unsupported_parameter' && e.param === param;
+  }
+
+  private async retryWithoutResponseFormat(
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+    prefersCompletionTokens: boolean
+  ): Promise<AIResponse> {
+    try {
+      const completion = await this.createChatCompletion(
+        messages,
+        false,
+        prefersCompletionTokens
+      );
+
+      const content = completion.choices?.[0]?.message?.content;
+      if (!content) {
+        console.error('AI engine: empty unstructured response from OpenAI');
         return buildFallbackResponse();
       }
 
       return this.parseResponse(content);
     } catch (error) {
-      console.error('AI engine: error processing message', error);
+      console.error('AI engine: unstructured retry failed', {
+        model: this.model,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return buildFallbackResponse();
     }
   }
 
   private parseResponse(raw: string): AIResponse {
-    try {
-      const parsed = JSON.parse(raw);
-      const validated = validateAndSanitize(parsed);
-
-      if (!validated) {
-        console.error('AI engine: response failed validation', raw);
-        return buildFallbackResponse();
-      }
-
-      return validated;
-    } catch (error) {
-      console.error('AI engine: failed to parse JSON response', error, raw);
+    const parsed = extractJsonObject(raw);
+    if (!parsed) {
+      console.error('AI engine: failed to parse JSON response', { raw });
       return buildFallbackResponse();
     }
+
+    const validated = validateAndSanitize(parsed);
+    if (!validated) {
+      console.error('AI engine: response failed validation', { raw });
+      return buildFallbackResponse();
+    }
+
+    return validated;
   }
 }
