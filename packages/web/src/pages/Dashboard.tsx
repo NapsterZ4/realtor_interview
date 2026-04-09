@@ -28,7 +28,6 @@ const pipelineStatusLabel: Record<string, string> = {
   ANSWERED: 'Answered',
   FOLLOW_UP: 'Follow Up',
   CLOSED: 'Closed',
-  HIGH_PRIORITY: 'High Priority',
 };
 
 const pipelineStatusColor: Record<string, string> = {
@@ -36,7 +35,6 @@ const pipelineStatusColor: Record<string, string> = {
   ANSWERED: 'bg-green-100 text-green-700',
   FOLLOW_UP: 'bg-amber-100 text-amber-700',
   CLOSED: 'bg-gray-200 text-gray-700',
-  HIGH_PRIORITY: 'bg-red-100 text-red-700',
 };
 
 function scoreColor(score: number): string {
@@ -255,7 +253,6 @@ export default function Dashboard() {
 
   const statusOptions = [
     { value: '', label: 'All Statuses' },
-    { value: 'HIGH_PRIORITY', label: 'High Priority' },
     { value: 'SENT', label: 'Sent' },
     { value: 'ANSWERED', label: 'Answered' },
     { value: 'FOLLOW_UP', label: 'Follow Up' },
@@ -345,13 +342,11 @@ export default function Dashboard() {
                             e.stopPropagation();
                           }}
                           onChange={(e) => {
-                            const next = e.target.value as 'SENT' | 'ANSWERED' | 'FOLLOW_UP' | 'CLOSED' | 'HIGH_PRIORITY';
-                            if (next === 'HIGH_PRIORITY') return;
+                            const next = e.target.value as 'SENT' | 'ANSWERED' | 'FOLLOW_UP' | 'CLOSED';
                             handleSetStatus(client.id, next);
                           }}
                           className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs bg-white"
                         >
-                          <option value="HIGH_PRIORITY">High Priority (Auto)</option>
                           <option value="SENT">Sent</option>
                           <option value="ANSWERED">Answered</option>
                           <option value="FOLLOW_UP">Follow Up</option>

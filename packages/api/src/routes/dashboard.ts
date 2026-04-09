@@ -9,7 +9,7 @@ import {
   WorkflowStatus,
 } from '@bqp/shared';
 
-type DashboardPipelineStatus = 'SENT' | 'ANSWERED' | 'FOLLOW_UP' | 'CLOSED' | 'HIGH_PRIORITY';
+type DashboardPipelineStatus = 'SENT' | 'ANSWERED' | 'FOLLOW_UP' | 'CLOSED';
 
 function computeScoreFromSignals(
   signals: Array<{ signalCategory: string; confidence: number }>
@@ -38,16 +38,11 @@ function computeScoreFromSignals(
 function mapToPipelineStatus(params: {
   workflowStatus?: string | null;
   interviewStatus?: string | null;
-  classification?: string | null;
 }): DashboardPipelineStatus {
-  const { workflowStatus, interviewStatus, classification } = params;
+  const { workflowStatus, interviewStatus } = params;
 
   if (workflowStatus === WorkflowStatus.CLOSED) {
     return 'CLOSED';
-  }
-
-  if (classification === BuyerClassification.HIGH_PROBABILITY) {
-    return 'HIGH_PRIORITY';
   }
 
   if (workflowStatus === WorkflowStatus.FOLLOW_UP) {
@@ -247,7 +242,6 @@ export default async function dashboardRoutes(app: FastifyInstance) {
         pipelineStatus: mapToPipelineStatus({
           workflowStatus: client.clientWorkflow?.status,
           interviewStatus: session?.status,
-          classification,
         }),
       };
     });
