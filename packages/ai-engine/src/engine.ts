@@ -211,11 +211,15 @@ export class InterviewAIEngine {
     structured: boolean,
     useCompletionTokens: boolean
   ) {
+    const supportsCustomTemperature = !this.model.startsWith('gpt-5');
     const request: Record<string, unknown> = {
       model: this.model,
       messages,
-      temperature: this.temperature,
     };
+
+    if (supportsCustomTemperature) {
+      request.temperature = this.temperature;
+    }
 
     if (useCompletionTokens) {
       request.max_completion_tokens = this.maxTokens;
@@ -230,6 +234,14 @@ export class InterviewAIEngine {
     try {
       return await this.client.chat.completions.create(request as any);
     } catch (error) {
+      if (this.isUnsupportedTemperature(error)) {
+        const fallbackTemperatureRequest: Record<string, unknown> = {
+          ...request,
+        };
+        delete fallbackTemperatureRequest.temperature;
+        return this.client.chat.completions.create(fallbackTemperatureRequest as any);
+      }
+
       if (
         this.isUnsupportedParam(error, useCompletionTokens ? 'max_completion_tokens' : 'max_tokens')
       ) {
@@ -250,6 +262,18 @@ export class InterviewAIEngine {
     if (!error || typeof error !== 'object') return false;
     const e = error as Record<string, unknown>;
     return e.code === 'unsupported_parameter' && e.param === param;
+  }
+
+  private isUnsupportedTemperature(error: unknown): boolean {
+    if (!error || typeof error !== 'object') return false;
+    const e = error as Record<string, unknown>;
+
+    if (e.param === 'temperature') {
+      return true;
+    }
+
+    const message = typeof e.message === 'string' ? e.message.toLowerCase() : '';
+    return message.includes('temperature') && message.includes('not support');
   }
 
   private async retryWithoutResponseFormat(
