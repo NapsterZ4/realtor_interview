@@ -9,7 +9,7 @@ import {
   WorkflowStatus,
 } from '@bqp/shared';
 
-type DashboardPipelineStatus = 'SENT' | 'ANSWERED' | 'FOLLOW_UP' | 'CLOSED';
+type DashboardPipelineStatus = 'SENT' | 'ANSWERED' | 'FOLLOW_UP' | 'CLOSED' | 'HIGH_PRIORITY';
 
 function computeScoreFromSignals(
   signals: Array<{ signalCategory: string; confidence: number }>
@@ -38,11 +38,16 @@ function computeScoreFromSignals(
 function mapToPipelineStatus(params: {
   workflowStatus?: string | null;
   interviewStatus?: string | null;
+  classification?: string | null;
 }): DashboardPipelineStatus {
-  const { workflowStatus, interviewStatus } = params;
+  const { workflowStatus, interviewStatus, classification } = params;
 
   if (workflowStatus === WorkflowStatus.CLOSED) {
     return 'CLOSED';
+  }
+
+  if (classification === BuyerClassification.HIGH_PROBABILITY) {
+    return 'HIGH_PRIORITY';
   }
 
   if (workflowStatus === WorkflowStatus.FOLLOW_UP) {
@@ -88,14 +93,42 @@ export default async function dashboardRoutes(app: FastifyInstance) {
       },
     });
 
-    const highPriority = await prisma.scoringResult.count({
-      where: {
-        interviewSession: {
-          client: { realtorId },
+    const highPriorityClients = await prisma.client.findMany({
+      where: { realtorId },
+      include: {
+        interviewSessions: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            scoringResult: {
+              select: {
+                classification: true,
+              },
+            },
+            extractedSignals: {
+              where: { supersededById: null },
+              select: {
+                signalCategory: true,
+                confidence: true,
+              },
+            },
+          },
         },
-        classification: BuyerClassification.HIGH_PROBABILITY,
       },
     });
+
+    const highPriority = highPriorityClients.reduce((count, client: any) => {
+      const session = client.interviewSessions?.[0];
+      if (!session) return count;
+
+      const classification =
+        session.scoringResult?.classification ??
+        (session.extractedSignals?.length
+          ? computeScoreFromSignals(session.extractedSignals).classification
+          : null);
+
+      return classification === BuyerClassification.HIGH_PROBABILITY ? count + 1 : count;
+    }, 0);
 
     return reply.send({
       success: true,
@@ -214,6 +247,7 @@ export default async function dashboardRoutes(app: FastifyInstance) {
         pipelineStatus: mapToPipelineStatus({
           workflowStatus: client.clientWorkflow?.status,
           interviewStatus: session?.status,
+          classification,
         }),
       };
     });
