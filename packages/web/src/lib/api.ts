@@ -1,24 +1,40 @@
 const API_BASE = '/api';
 
+type RequestOptions = RequestInit & {
+  skipAuth?: boolean;
+};
+
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestOptions = {}
 ): Promise<T> {
+  const { skipAuth = false, ...fetchOptions } = options;
   const token = localStorage.getItem('token');
   const headers: Record<string, string> = {
-    ...((options.headers as Record<string, string>) || {}),
+    ...((fetchOptions.headers as Record<string, string>) || {}),
   };
-  if (options.body) {
+  if (fetchOptions.body) {
     headers['Content-Type'] = 'application/json';
   }
-  if (token) {
+  if (!skipAuth && token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...fetchOptions,
+      headers,
+    });
+  } catch (err: any) {
+    if (err instanceof TypeError) {
+      throw new ApiError(
+        'Could not send the request. Please refresh and try again.',
+        0
+      );
+    }
+    throw err;
+  }
 
   const json = await res.json();
 
@@ -62,11 +78,15 @@ export const interviews = {
   create: (clientId: string) =>
     request<{ session: any; interviewUrl: string }>(`/clients/${clientId}/interviews`, { method: 'POST', body: '{}' }),
   get: (token: string) =>
-    request<any>(`/interviews/${token}`),
+    request<any>(`/interviews/${encodeURIComponent(token)}`, { skipAuth: true }),
   sendMessage: (token: string, message: string) =>
-    request<any>(`/interviews/${token}/messages`, { method: 'POST', body: JSON.stringify({ message }) }),
+    request<any>(`/interviews/${encodeURIComponent(token)}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+      skipAuth: true,
+    }),
   status: (token: string) =>
-    request<any>(`/interviews/${token}/status`),
+    request<any>(`/interviews/${encodeURIComponent(token)}/status`, { skipAuth: true }),
 };
 
 // Reports
