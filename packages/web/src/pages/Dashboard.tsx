@@ -27,12 +27,14 @@ const pipelineStatusLabel: Record<string, string> = {
   SENT: 'Sent',
   ANSWERED: 'Answered',
   FOLLOW_UP: 'Follow Up',
+  CLOSED: 'Closed',
 };
 
 const pipelineStatusColor: Record<string, string> = {
   SENT: 'bg-blue-100 text-blue-700',
   ANSWERED: 'bg-green-100 text-green-700',
   FOLLOW_UP: 'bg-amber-100 text-amber-700',
+  CLOSED: 'bg-gray-200 text-gray-700',
 };
 
 function scoreColor(score: number): string {
@@ -70,7 +72,7 @@ function ActionsMenu({
 }: {
   client: any;
   onDelete: (id: string) => void;
-  onSetStatus: (id: string, status: 'SENT' | 'ANSWERED' | 'FOLLOW_UP') => Promise<void>;
+  onSetStatus: (id: string, status: 'SENT' | 'ANSWERED' | 'FOLLOW_UP' | 'CLOSED') => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -110,7 +112,7 @@ function ActionsMenu({
     setConfirming(false);
   };
 
-  const handleSetStatus = async (status: 'SENT' | 'ANSWERED' | 'FOLLOW_UP') => {
+  const handleSetStatus = async (status: 'SENT' | 'ANSWERED' | 'FOLLOW_UP' | 'CLOSED') => {
     if (updatingStatus) return;
     setUpdatingStatus(true);
     try {
@@ -170,7 +172,7 @@ function ActionsMenu({
           <div className="px-3 py-2 border-b border-gray-100">
             <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1.5">Set Status</p>
             <div className="flex flex-col gap-1">
-              {(['SENT', 'ANSWERED', 'FOLLOW_UP'] as const).map((status) => (
+              {(['SENT', 'ANSWERED', 'FOLLOW_UP', 'CLOSED'] as const).map((status) => (
                 <button
                   key={status}
                   disabled={updatingStatus}
@@ -231,7 +233,7 @@ export default function Dashboard() {
     }
   };
 
-  const handleSetStatus = async (clientId: string, status: 'SENT' | 'ANSWERED' | 'FOLLOW_UP') => {
+  const handleSetStatus = async (clientId: string, status: 'SENT' | 'ANSWERED' | 'FOLLOW_UP' | 'CLOSED') => {
     try {
       await workflowApi.setStatus(clientId, status);
       loadData();
@@ -254,6 +256,7 @@ export default function Dashboard() {
     { value: 'SENT', label: 'Sent' },
     { value: 'ANSWERED', label: 'Answered' },
     { value: 'FOLLOW_UP', label: 'Follow Up' },
+    { value: 'CLOSED', label: 'Closed' },
   ];
 
   return (
@@ -339,7 +342,7 @@ export default function Dashboard() {
                             e.stopPropagation();
                           }}
                           onChange={(e) => {
-                            const next = e.target.value as 'SENT' | 'ANSWERED' | 'FOLLOW_UP';
+                            const next = e.target.value as 'SENT' | 'ANSWERED' | 'FOLLOW_UP' | 'CLOSED';
                             handleSetStatus(client.id, next);
                           }}
                           className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs bg-white"
@@ -347,6 +350,7 @@ export default function Dashboard() {
                           <option value="SENT">Sent</option>
                           <option value="ANSWERED">Answered</option>
                           <option value="FOLLOW_UP">Follow Up</option>
+                          <option value="CLOSED">Closed</option>
                         </select>
                       </div>
 

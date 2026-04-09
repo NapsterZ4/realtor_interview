@@ -8,13 +8,15 @@ const executeSchema = z.object({
 });
 
 const setPipelineStatusSchema = z.object({
-  status: z.enum(['SENT', 'ANSWERED', 'FOLLOW_UP']),
+  status: z.enum(['SENT', 'ANSWERED', 'FOLLOW_UP', 'CLOSED']),
 });
 
-function mapPipelineStatusToWorkflowStatus(status: 'SENT' | 'ANSWERED' | 'FOLLOW_UP'): WorkflowStatus {
+function mapPipelineStatusToWorkflowStatus(status: 'SENT' | 'ANSWERED' | 'FOLLOW_UP' | 'CLOSED'): WorkflowStatus {
   switch (status) {
     case 'FOLLOW_UP':
       return WorkflowStatus.FOLLOW_UP;
+    case 'CLOSED':
+      return WorkflowStatus.CLOSED;
     case 'ANSWERED':
       return WorkflowStatus.INTERVIEW_COMPLETE;
     default:
