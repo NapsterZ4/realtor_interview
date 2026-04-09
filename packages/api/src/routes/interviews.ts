@@ -539,9 +539,10 @@ export default async function interviewRoutes(app: FastifyInstance) {
       lastAnsweredPillar: aiResponse.current_pillar,
     };
 
-    // Completion is driven by the LLM's decision (interview_feels_complete),
-    // NOT by signal-based rules. The progress bar is just visual feedback.
-    if (aiResponse.interview_feels_complete) {
+    // Completion authority is backend-only.
+    // The model can suggest completion through completion_candidate, but
+    // official completion is decided by signal-based rules here.
+    if (completionResult.isComplete) {
       const canAwait = validateTransition(
         'interview',
         InterviewSessionStatus.IN_PROGRESS,

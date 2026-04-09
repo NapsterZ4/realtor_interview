@@ -30,7 +30,7 @@ function buildFallbackResponse(): AIResponse {
     extracted_signals: [],
     current_pillar: 'Motivation',
     pillars_touched: [],
-    interview_feels_complete: false,
+    completion_candidate: false,
   };
 }
 
@@ -76,7 +76,7 @@ function validateAndSanitize(parsed: unknown): AIResponse | null {
   const currentPillar =
     typeof obj.current_pillar === 'string' && VALID_PILLARS.includes(obj.current_pillar)
       ? obj.current_pillar
-      : 'Motivation';
+      : inferCurrentPillar(extractedSignals);
 
   const pillarsTouched: string[] = [];
   if (Array.isArray(obj.pillars_touched)) {
@@ -87,18 +87,41 @@ function validateAndSanitize(parsed: unknown): AIResponse | null {
     }
   }
 
-  const interviewFeelsComplete =
-    typeof obj.interview_feels_complete === 'boolean'
-      ? obj.interview_feels_complete
-      : false;
+  const completionCandidate =
+    typeof obj.completion_candidate === 'boolean'
+      ? obj.completion_candidate
+      : typeof obj.interview_feels_complete === 'boolean'
+        ? obj.interview_feels_complete
+        : false;
 
   return {
     reply: obj.reply.trim(),
     extracted_signals: extractedSignals,
     current_pillar: currentPillar,
     pillars_touched: pillarsTouched,
-    interview_feels_complete: interviewFeelsComplete,
+    completion_candidate: completionCandidate,
   };
+}
+
+function inferCurrentPillar(extractedSignals: ExtractedSignalInput[]): string {
+  const firstSignal = extractedSignals[0];
+
+  if (!firstSignal) {
+    return 'Motivation';
+  }
+
+  switch (firstSignal.signal_category) {
+    case 'TIMELINE':
+      return 'Timeline';
+    case 'PROPERTY_PREFERENCE':
+      return 'Property Preferences';
+    case 'FINANCIAL_READINESS':
+      return 'Financial Readiness';
+    case 'ENGAGEMENT':
+      return 'Engagement';
+    default:
+      return 'Motivation';
+  }
 }
 
 export interface InterviewAIEngineOptions {

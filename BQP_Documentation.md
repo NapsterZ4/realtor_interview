@@ -55,7 +55,7 @@ packages/
 │     └─→ Señales versionadas (supersededById)                    │
 │     └─→ Barra de progreso visual para el buyer                  │
 │                                                                 │
-│  5. AI decide terminar (interview_feels_complete: true)         │
+│  5. Backend decide terminar (checkCompletion.isComplete)         │
 │     └─→ Buyer Score calculado automáticamente                   │
 │     └─→ Pantalla "Your Home Buying Strategy" mostrada           │
 │     └─→ Email de estrategia enviado al buyer                    │
@@ -81,7 +81,7 @@ packages/
 |-------|-------------|
 | `PENDING` | Link creado, buyer no ha iniciado |
 | `IN_PROGRESS` | Buyer está respondiendo preguntas |
-| `AWAITING_VALIDATION` | Conversación terminada, validando |
+| `AWAITING_VALIDATION` | Conversación lista para cierre por reglas backend |
 | `COMPLETED` | Entrevista finalizada y bloqueada |
 | `EXPIRED` | Link expirado (14 días) |
 | `ABANDONED` | Sesión inactiva, puede resumirse |
@@ -158,7 +158,7 @@ Nota: COMPLETED es estado terminal. ABANDONED puede resumirse.
 **Reglas:**
 - Una vez `COMPLETED`, la entrevista se bloquea y no puede editarse
 - `PENDING` expira después de 14 días (configurable via `INTERVIEW_EXPIRY_DAYS`)
-- El LLM controla la completación via `interview_feels_complete`
+- El backend controla la completación via `checkCompletion` (señales requeridas + confidence mínima)
 - Sesiones abandonadas pueden resumirse
 
 ### 4.2 Report
@@ -386,13 +386,11 @@ LOW:    < 2 señales
 
 ### 8.5 Completación de Entrevista
 
-El LLM es la **única autoridad** sobre cuándo termina la entrevista:
-- Marca `interview_feels_complete: true` SOLO en el mensaje final de despedida
-- No se apura — típicamente 5-10 intercambios para cubrir los pilares
-- Condiciones para completar:
-  1. Información significativa recopilada de los pilares
-  2. Conversación llegó a conclusión natural
-  3. El reply ES el mensaje de cierre/despedida
+El backend es la **única autoridad** sobre cuándo termina la entrevista:
+- La API calcula completación con `checkCompletion()` sobre señales requeridas
+- El modelo puede sugerir cierre con `completion_candidate: true`, pero no cierra por sí solo
+- La barra de progreso refleja cobertura de señales y acompaña la conversación
+- El cierre oficial ocurre cuando las reglas backend permiten transición a `COMPLETED`
 
 ### 8.6 Formato de Respuesta (JSON)
 
@@ -407,11 +405,14 @@ El LLM es la **única autoridad** sobre cuándo termina la entrevista:
       "confidence": 0.0 a 1.0
     }
   ],
-  "current_pillar": "Motivation | Timeline | Property Preferences | Financial Readiness | Engagement",
-  "pillars_touched": ["pilares discutidos hasta ahora"],
-  "interview_feels_complete": false
+  "completion_candidate": false
 }
 ```
+
+Notas:
+- `completion_candidate` es sugerencia conversacional del modelo.
+- El backend decide la completación oficial.
+- `current_pillar` y `pillars_touched` pueden existir por compatibilidad histórica, pero no gobiernan cierre.
 
 ---
 
@@ -612,7 +613,7 @@ Cuando la entrevista se completa, el buyer ve:
 ## 12. Email de Completación
 
 ### Cuándo se envía
-- Automáticamente al completar entrevista (`interview_feels_complete: true`)
+- Automáticamente al completar entrevista (cuando backend marca `COMPLETED`)
 - Async, fire-and-forget (errores se loguean, no bloquean)
 - Solo si el buyer tiene email
 
@@ -661,7 +662,7 @@ Cuando la entrevista se completa, el buyer ve:
 1. **Máximo 1 entrevista activa por cliente** — Debe completar/abandonar antes de crear nueva
 2. **Expiración de entrevista**: 14 días — Auto-marcada como EXPIRED al acceder
 3. **Versionado de señales** — Señales se versionan, nunca se borran; queries usan `supersededById: null`
-4. **Completación la decide el LLM** — Solo `interview_feels_complete: true` dispara el cierre
+4. **Completación la decide el backend** — `checkCompletion` dispara el cierre oficial; `completion_candidate` solo sugiere
 5. **Barra de progreso es solo visual** — Basada en señales requeridas, no determina completación
 6. **Score se calcula en vivo** — Dashboard muestra score desde señales actuales sin necesidad de reporte
 7. **Eliminación en cascada** — Borrar cliente elimina todo: sesiones, mensajes, señales, scores, reportes, workflow

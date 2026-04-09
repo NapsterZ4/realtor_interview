@@ -76,7 +76,7 @@ export interface AIResponse {
   extracted_signals: ExtractedSignalInput[];
   current_pillar: string;
   pillars_touched: string[];
-  interview_feels_complete: boolean;
+  completion_candidate: boolean;
 }
 
 export interface InterviewContext {
