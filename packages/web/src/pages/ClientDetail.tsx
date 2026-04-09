@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { clients as clientsApi, interviews, reports, workflow as workflowApi } from '../lib/api';
+import { clients as clientsApi, interviews, workflow as workflowApi } from '../lib/api';
 
 /* ── helpers ── */
 
@@ -179,11 +179,6 @@ export default function ClientDetail() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleGenerateReport = async () => {
-    if (!id) return;
-    setActionLoading('report');
-    try { await reports.generate(id); load(); } catch (e: any) { setError(e.message); } finally { setActionLoading(''); }
-  };
   const handleCreateInterview = async () => {
     if (!id) return;
     setActionLoading('interview');
@@ -313,12 +308,6 @@ export default function ClientDetail() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {latestSession?.status === 'COMPLETED' && !hasReport && (
-                <button onClick={handleGenerateReport} disabled={actionLoading === 'report'}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
-                  {actionLoading === 'report' ? 'Generating...' : 'Generate Report'}
-                </button>
-              )}
               {wf?.status === 'REPORT_READY' && (
                 <button onClick={handleExecuteAction} disabled={actionLoading === 'execute'}
                   className="px-5 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50">
@@ -392,14 +381,6 @@ export default function ClientDetail() {
             </Card>
           </div>
 
-          {latestReport && (
-            <div className="flex justify-end">
-              <Link to={`/clients/${id}/reports/${latestReport.id}`}
-                className="text-sm text-primary-600 hover:text-primary-800 font-medium">
-                View Full Report &rarr;
-              </Link>
-            </div>
-          )}
         </>
       )}
 
