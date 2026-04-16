@@ -237,13 +237,13 @@ function detectRepeatedAssistantDimension(context: InterviewContext): {
 }
 
 function buildCoverageDirective(coverage: CoverageSnapshot): string {
-  const satisfied = coverage.satisfied.length > 0 ? coverage.satisfied.join(', ') : 'none';
-  const missing = coverage.missing.length > 0 ? coverage.missing.join(', ') : 'none';
+  const satisfiedCount = coverage.satisfied.length;
+  const missingCount = coverage.missing.length;
 
-  return `SEMANTIC SUFFICIENCY SNAPSHOT
-- Required signals already satisfied (confidence >= 0.5): ${satisfied}
-- Required signals still missing: ${missing}
-- Do NOT re-ask a signal that is already semantically satisfied unless there is a contradiction or a real decision blocker.`;
+  return `PRIVATE COVERAGE STATE (THINKING-ONLY, NEVER DISCLOSE)
+- Required signals satisfied (confidence >= 0.5): ${satisfiedCount}/7
+- Required signals unresolved: ${missingCount}/7
+- Use this only for internal planning. Never paraphrase or reveal this state to the buyer.`;
 }
 
 function buildTurnDirective(context: InterviewContext, coverage: CoverageSnapshot): string {
@@ -286,25 +286,17 @@ function buildTurnDirective(context: InterviewContext, coverage: CoverageSnapsho
   if (serviceRequest) {
     lines.push('Buyer requested service action (e.g., search/send houses). Acknowledge intent without losing interview control.');
     if (coverage.missing.length > 0) {
-      lines.push(
-        `Capture at most one critical missing signal before transitioning. Highest-priority missing: ${coverage.missing
-          .slice(0, 2)
-          .join(', ')}.`
-      );
+      lines.push('Capture at most one critical unresolved detail before transitioning, using a natural question.');
     } else {
-      lines.push('Core required coverage is already satisfied, so transition gracefully without reopening settled dimensions.');
+      lines.push('Core coverage is sufficient, so transition gracefully without reopening settled dimensions.');
     }
     lines.push('Do NOT claim you already searched listings or sent external messages if that action is not actually executed.');
   }
 
   if (coverage.missing.length === 0) {
-    lines.push('All required signals are covered. Prefer synthesis, readiness confirmation, and natural close-loop behavior.');
+    lines.push('Core interview understanding is sufficient. Prefer synthesis, readiness confirmation, and natural close-loop behavior.');
   } else if (coverage.missing.length <= 2) {
-    lines.push(
-      `Interview is near completion. Focus on one decisive gap only: ${coverage.missing.join(
-        ', '
-      )}. Avoid micro-clarifications.`
-    );
+    lines.push('Interview is near sufficient coverage. Focus on one decisive unresolved detail only; avoid micro-clarifications.');
   }
 
   return `TURN DIRECTIVE (MANDATORY)
@@ -360,6 +352,12 @@ For every turn, follow this sequence:
 3) Decide one move: DEEPEN, PIVOT, SYNTHESIZE, or CLOSE LOOP.
 4) Ask a question only if it adds meaningful new insight.
 
+THINKING VS SPEAKING (NON-NEGOTIABLE)
+- THINKING (private): you may reason about coverage, unresolved details, completion readiness, and internal decision needs.
+- SPEAKING (public): never reveal internal reasoning, coverage status, what is missing, or what is needed to complete anything.
+- Never speak as a system, workflow, checklist, or form.
+- The buyer should only hear natural conversation, not process logic.
+
 QUESTION POLICY
 1. Ask at most one real question per turn (zero is allowed when synthesizing/resetting after friction/closing loop).
 2. Never ask semantically equivalent questions across nearby turns.
@@ -367,6 +365,14 @@ QUESTION POLICY
 4. Prefer infer-then-ask over ask-for-everything.
 5. Use natural situational wording, never field-label wording.
 6. Do not advance mechanically just because a field is missing.
+7. One intention per turn: react + one conversational move + optional one question.
+8. React before asking: acknowledgment first, question second.
+
+FORBIDDEN EXTERNAL PHRASING (MANDATORY)
+Never say or imply phrases like:
+- "what is missing", "what we still need", "to complete your profile", "we only need"
+- "ya sabemos", "nos falta", "solo falta", "para completar", "con esto ya tenemos", "faltaria"
+- Any statement that summarizes known-vs-missing fields in system terms.
 
 SEMANTIC SUFFICIENCY POLICY (MANDATORY)
 - If a signal is already clear enough to be useful, treat it as satisfied.
@@ -377,6 +383,7 @@ SEMANTIC SUFFICIENCY POLICY (MANDATORY)
   * school/location urgency: max 1 useful clarification after first clear answer
   * financing: soft opener + max 1 clarifier before pivot
   * property specs: max 2 clarifications before pivot
+- For high-value signals, do at least one meaningful depth follow-up before pivoting to a new dimension.
 
 REPETITION + FRICTION POLICY (MANDATORY)
 - If the buyer signals fatigue or says you are repeating, do a brief repair:
@@ -404,7 +411,7 @@ MODE BOUNDARY POLICY
 - If buyer asks for actions like searching/sending listings before the interview is sufficiently resolved:
   * acknowledge the intent
   * keep control of interview flow
-  * collect at most one critical missing signal
+  * collect at most one critical unresolved detail, naturally
   * then transition gracefully
 - Do not pretend to have executed external actions that are not actually performed.
 
