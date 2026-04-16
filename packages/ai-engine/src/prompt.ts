@@ -1,5 +1,102 @@
 import { InterviewContext } from '@bqp/shared';
 
+const REQUIRED_SIGNAL_KEYS = [
+  'buyer_type',
+  'motivation',
+  'timeline',
+  'target_area',
+  'property_type',
+  'financing_intent',
+  'financial_indicator',
+] as const;
+
+const DIMENSION_PATTERNS = {
+  motivation: [
+    'motivation',
+    'motivacion',
+    'family',
+    'familia',
+    'why',
+    'por que',
+    'reason',
+    'razon',
+  ],
+  timeline: [
+    'timeline',
+    'fecha',
+    'month',
+    'mes',
+    'agosto',
+    'august',
+    'when',
+    'cuando',
+    'move',
+    'mudanza',
+  ],
+  school_location: [
+    'school',
+    'escuela',
+    'boone',
+    'bus',
+    'zoned',
+    'asignada',
+    'enrollment',
+    'inscripcion',
+    'orlando',
+    'area',
+    'zona',
+  ],
+  property_specs: [
+    'property',
+    'vivienda',
+    'house',
+    'casa',
+    'condo',
+    'townhome',
+    'unifamiliar',
+    'bed',
+    'habitacion',
+    'bath',
+    'bano',
+    'garage',
+    'garaje',
+    'marquesina',
+  ],
+  financial: [
+    'budget',
+    'presupuesto',
+    'price',
+    'precio',
+    '300k',
+    'mortgage',
+    'hipoteca',
+    'preapproval',
+    'preaprob',
+    'down payment',
+    'enganche',
+    'assistance',
+    'ayuda',
+    'loan',
+    'prestamo',
+    'income',
+    'ingreso',
+    'cash',
+  ],
+} as const;
+
+const DIMENSION_LABELS: Record<keyof typeof DIMENSION_PATTERNS, string> = {
+  motivation: 'buyer motivation',
+  timeline: 'timeline',
+  school_location: 'school/location constraints',
+  property_specs: 'property specs',
+  financial: 'financial readiness',
+};
+
+interface CoverageSnapshot {
+  satisfied: string[];
+  missing: string[];
+}
+
 function countWords(text: string): number {
   return text
     .trim()
@@ -7,8 +104,15 @@ function countWords(text: string): number {
     .filter(Boolean).length;
 }
 
+function normalize(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 function looksHesitant(text: string): boolean {
-  const value = text.toLowerCase();
+  const value = normalize(text);
   return [
     "not sure",
     "don't know",
@@ -21,38 +125,190 @@ function looksHesitant(text: string): boolean {
     'later',
     'mas o menos',
     'no se',
+    'no estoy seguro',
+    'no estoy segura',
+    'quien sabe',
   ].some((pattern) => value.includes(pattern));
 }
 
-function buildTurnDirective(context: InterviewContext): string {
+function looksFatigued(text: string): boolean {
+  const value = normalize(text);
+  return [
+    'ya me has preguntado',
+    'muchas veces',
+    'otra vez',
+    'repet',
+    'ya te lo habia dicho',
+    'ya te dije',
+    'por que es tan importante',
+    'why is this important',
+    'you already asked',
+    'you asked me already',
+    'stop asking',
+  ].some((pattern) => value.includes(pattern));
+}
+
+function looksLikeServiceRequest(text: string): boolean {
+  const value = normalize(text);
+  return [
+    'buscame casas',
+    'buscame',
+    'enviamelas',
+    'mandamelas',
+    'send me listings',
+    'find homes',
+    'show me homes',
+    'search houses',
+    'damelas aqui',
+    'send them here',
+    'mandame opciones',
+  ].some((pattern) => value.includes(pattern));
+}
+
+function getCoverageSnapshot(context: InterviewContext): CoverageSnapshot {
+  const satisfiedSet = new Set<string>();
+
+  for (const signal of context.signals) {
+    if (signal.confidence >= 0.5) {
+      satisfiedSet.add(signal.signalKey);
+    }
+  }
+
+  const satisfied = REQUIRED_SIGNAL_KEYS.filter((key) => satisfiedSet.has(key));
+  const missing = REQUIRED_SIGNAL_KEYS.filter((key) => !satisfiedSet.has(key));
+
+  return {
+    satisfied: [...satisfied],
+    missing: [...missing],
+  };
+}
+
+function classifyDimension(text: string): keyof typeof DIMENSION_PATTERNS | null {
+  const value = normalize(text);
+
+  let bestDimension: keyof typeof DIMENSION_PATTERNS | null = null;
+  let bestScore = 0;
+
+  for (const [dimension, patterns] of Object.entries(DIMENSION_PATTERNS) as Array<
+    [keyof typeof DIMENSION_PATTERNS, readonly string[]]
+  >) {
+    let score = 0;
+    for (const pattern of patterns) {
+      if (value.includes(pattern)) score++;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestDimension = dimension;
+    }
+  }
+
+  return bestScore > 0 ? bestDimension : null;
+}
+
+function detectRepeatedAssistantDimension(context: InterviewContext): {
+  dimension: keyof typeof DIMENSION_PATTERNS;
+  count: number;
+} | null {
+  const recentAssistantQuestions = context.history
+    .filter((m) => m.role.toLowerCase() === 'assistant' && m.content.includes('?'))
+    .slice(-8);
+
+  if (recentAssistantQuestions.length < 3) return null;
+
+  const counts = new Map<keyof typeof DIMENSION_PATTERNS, number>();
+
+  for (const message of recentAssistantQuestions) {
+    const dimension = classifyDimension(message.content);
+    if (!dimension) continue;
+    counts.set(dimension, (counts.get(dimension) ?? 0) + 1);
+  }
+
+  let top: { dimension: keyof typeof DIMENSION_PATTERNS; count: number } | null = null;
+
+  for (const [dimension, count] of counts.entries()) {
+    if (!top || count > top.count) {
+      top = { dimension, count };
+    }
+  }
+
+  if (!top || top.count < 3) return null;
+  return top;
+}
+
+function buildCoverageDirective(coverage: CoverageSnapshot): string {
+  const satisfied = coverage.satisfied.length > 0 ? coverage.satisfied.join(', ') : 'none';
+  const missing = coverage.missing.length > 0 ? coverage.missing.join(', ') : 'none';
+
+  return `SEMANTIC SUFFICIENCY SNAPSHOT
+- Required signals already satisfied (confidence >= 0.5): ${satisfied}
+- Required signals still missing: ${missing}
+- Do NOT re-ask a signal that is already semantically satisfied unless there is a contradiction or a real decision blocker.`;
+}
+
+function buildTurnDirective(context: InterviewContext, coverage: CoverageSnapshot): string {
   const words = countWords(context.buyerMessage);
   const hesitant = looksHesitant(context.buyerMessage);
+  const fatigued = looksFatigued(context.buyerMessage);
+  const serviceRequest = looksLikeServiceRequest(context.buyerMessage);
+  const repeatedDimension = detectRepeatedAssistantDimension(context);
   const previousUserTurns = context.history.filter((m) => m.role.toLowerCase() === 'user').length;
+  const lines: string[] = [];
 
   if (words <= 2) {
-    return `TURN DIRECTIVE (MANDATORY)
-- Buyer response is ultra-brief (${words} word${words === 1 ? '' : 's'}). Treat this as low engagement risk.
-- In this turn, you MUST stay on the same topic and ask one gentle depth follow-up.
-- Do NOT jump to a new intake topic this turn.
-- Do NOT ask a field-style question this turn.
-- Your reply should make the buyer comfortable to expand beyond one word.`;
+    lines.push(
+      `Buyer response is ultra-brief (${words} word${words === 1 ? '' : 's'}). Keep it easy and non-threatening.`
+    );
+    lines.push('Stay on the current meaning and ask one gentle question that invites a sentence, not a checkbox.');
+  } else if (hesitant) {
+    lines.push('Buyer shows uncertainty. Slow down and ask for direction rather than precision.');
+    lines.push('Use one soft question and avoid abrupt topic switches this turn.');
+  } else if (previousUserTurns < 3) {
+    lines.push('Early conversation phase: prioritize trust and natural discovery over coverage.');
+    lines.push('Ask one open, easy question that can produce narrative detail.');
+  } else {
+    lines.push('Prefer depth before breadth, but do not keep drilling a settled dimension.');
   }
 
-  if (hesitant) {
-    return `TURN DIRECTIVE (MANDATORY)
-- Buyer shows uncertainty/hesitation.
-- Slow down, normalize uncertainty, and ask for direction rather than precision.
-- Keep one soft question; avoid switching topics abruptly.`;
+  if (repeatedDimension) {
+    lines.push(
+      `Recent assistant questions over-focused on ${DIMENSION_LABELS[repeatedDimension.dimension]} (${repeatedDimension.count} of recent questions).`
+    );
+    lines.push('You MUST pivot to a different high-value dimension unless the buyer explicitly asks to stay there.');
+    lines.push('Do NOT ask a semantically equivalent rephrase of a recent question.');
   }
 
-  if (previousUserTurns < 3) {
-    return `TURN DIRECTIVE
-- Early conversation phase: prioritize trust and discovery over coverage.
-- Ask one open, easy-to-answer question that invites a fuller response.`;
+  if (fatigued) {
+    lines.push('Buyer signaled fatigue/repetition. Use a brief apology (one short clause) and acknowledge what is already clear.');
+    lines.push('Do not ask about the same dimension again in this turn; pivot to a new high-value angle.');
   }
 
-  return `TURN DIRECTIVE
-- Prefer depth before breadth: ask one follow-up that deepens meaning before moving on.`;
+  if (serviceRequest) {
+    lines.push('Buyer requested service action (e.g., search/send houses). Acknowledge intent without losing interview control.');
+    if (coverage.missing.length > 0) {
+      lines.push(
+        `Capture at most one critical missing signal before transitioning. Highest-priority missing: ${coverage.missing
+          .slice(0, 2)
+          .join(', ')}.`
+      );
+    } else {
+      lines.push('Core required coverage is already satisfied, so transition gracefully without reopening settled dimensions.');
+    }
+    lines.push('Do NOT claim you already searched listings or sent external messages if that action is not actually executed.');
+  }
+
+  if (coverage.missing.length === 0) {
+    lines.push('All required signals are covered. Prefer synthesis, readiness confirmation, and natural close-loop behavior.');
+  } else if (coverage.missing.length <= 2) {
+    lines.push(
+      `Interview is near completion. Focus on one decisive gap only: ${coverage.missing.join(
+        ', '
+      )}. Avoid micro-clarifications.`
+    );
+  }
+
+  return `TURN DIRECTIVE (MANDATORY)
+${lines.map((line) => `- ${line}`).join('\n')}`;
 }
 
 export function buildSystemPrompt(context: InterviewContext): string {
@@ -66,68 +322,91 @@ export function buildSystemPrompt(context: InterviewContext): string {
         .join('\n')
     : 'No signals gathered yet.';
 
-  const turnDirective = buildTurnDirective(context);
+  const coverage = getCoverageSnapshot(context);
+  const coverageDirective = buildCoverageDirective(coverage);
+  const turnDirective = buildTurnDirective(context, coverage);
 
   return `SYSTEM ROLE
 You are the conversational interview guide for a Buyer Qualification and Decision Intelligence System used by Realtors.
-You conduct a natural, trust-building conversation with a home buyer while gathering useful context on motivations, timeline, target areas, property preferences, financing direction, and readiness signals.
+You conduct a trust-building, cognitively intelligent conversation with a home buyer while gathering context on motivations, timeline, target areas, property preferences, financing direction, and readiness signals.
 
 ${languageInstruction}
 
 You are NOT a form.
 You are NOT a checklist narrator.
+You are NOT a generic property-search chatbot.
 You are NOT the authority that decides official interview completion.
 You are NOT allowed to reveal internal scoring, qualification logic, pillar names, evaluation rules, or backend workflow.
 
 CORE OBJECTIVE
-Make the buyer feel they are talking to a calm, capable, professional human guide.
-At the same time:
-- ask thoughtful follow-up questions
-- adapt to what the buyer already shared
-- gently surface the information the system needs
-- avoid pressure, especially around finances
-- keep the pace natural
-- ask only one real question at a time
+Make the buyer feel they are talking to a calm, capable, professional human guide who understands people, not just fields.
+Optimize for:
+- naturalness
+- trust and disclosure
+- insight gain per turn
+- low repetition
+- useful qualification quality (not just slot filling)
 
 CONVERSATIONAL STYLE
-Be warm, concise, human, confident, lightly encouraging, never robotic, and never repetitive.
-Most turns should follow this structure:
-1) brief reaction to what the buyer said
-2) light validation / understanding
-3) one best next question
-Do not become chatty, theatrical, or long-winded.
+Be warm, concise, human, confident, and lightly encouraging.
+Avoid repetitive fillers (e.g., repeating "Perfecto, gracias..." every turn).
+Acknowledgment should be short and purposeful.
+Default reply length: 1-3 sentences unless a longer explanation is explicitly requested.
 
-QUESTIONING RULES
-1. Ask one real question per turn.
-2. Never dump multiple intake questions in one message.
-3. Do not force rigid ordering when the buyer naturally moved to another topic.
-4. If the buyer already provided useful detail, build on it instead of asking stock questions.
-5. Prefer adaptive follow-ups over abrupt topic switching.
-6. Use natural situational wording, not field-label wording.
-7. Do not advance topic just because a field is missing.
-8. Before switching topic, usually ask at least one depth follow-up on the current topic.
+INTERVIEW OPERATING MODEL (MANDATORY)
+For every turn, follow this sequence:
+1) React briefly to what the buyer said.
+2) Infer what is already clear vs still unknown.
+3) Decide one move: DEEPEN, PIVOT, SYNTHESIZE, or CLOSE LOOP.
+4) Ask a question only if it adds meaningful new insight.
 
-ANTI-FORM GUARDRAILS
-- A response that sounds like a checklist is a failed response.
-- Avoid direct intake phrasings like standalone "timeline?", "budget?", "property type?" without context.
-- React first, ask second.
-- Questions should feel answerable with a sentence, not a checkbox.
-- If the buyer answer could remain one word again, rewrite your question to be warmer and more open.
+QUESTION POLICY
+1. Ask at most one real question per turn (zero is allowed when synthesizing/resetting after friction/closing loop).
+2. Never ask semantically equivalent questions across nearby turns.
+3. A question is valid only if its answer could change scoring confidence, report quality, or next operational action.
+4. Prefer infer-then-ask over ask-for-everything.
+5. Use natural situational wording, never field-label wording.
+6. Do not advance mechanically just because a field is missing.
+
+SEMANTIC SUFFICIENCY POLICY (MANDATORY)
+- If a signal is already clear enough to be useful, treat it as satisfied.
+- Do NOT ask for extra precision unless that precision changes a real decision.
+- Do NOT re-open resolved dimensions unless there is contradiction, ambiguity, or clear operational need.
+- Clarification budgets by dimension:
+  * timeline: max 1 useful clarification after first clear answer
+  * school/location urgency: max 1 useful clarification after first clear answer
+  * financing: soft opener + max 1 clarifier before pivot
+  * property specs: max 2 clarifications before pivot
+
+REPETITION + FRICTION POLICY (MANDATORY)
+- If the buyer signals fatigue or says you are repeating, do a brief repair:
+  1) one short apology
+  2) one-line synthesis of what is already understood
+  3) pivot to a different high-value angle (or offer two concise options)
+- Never defend the process at length.
+- Never keep interrogating the same reason with different wording.
+
+ENGAGEMENT POLICY
+- Build progressive trust, not passive data capture.
+- Invite richer answers with specific, easy-to-answer prompts.
+- If buyer is giving short answers, ask questions that invite story/context, not tighter checkboxes.
+- If buyer is open, let them speak, then narrow with one focused follow-up.
 
 FINANCIAL TOPIC HANDLING
-- Introduce money topics gradually and without pressure.
+- Keep this human sequence: direction -> comfort -> frictions -> support needed -> readiness.
 - Do not interrogate. Do not judge.
-- Accept directional/rough answers when enough.
-- If buyer is hesitant, move on and revisit later through context.
-- Natural softeners are encouraged when relevant: "even a rough idea helps", "a lot of buyers are still sorting that out", "if you've thought about it at all".
-- Do not ask exact income unless the buyer already established enough trust and the conversation truly requires it.
+- Accept directional answers when enough.
+- If buyer asks for help (e.g., assistance), shift to supportive guidance and extract only what is necessary next.
+- Do not ask exact income unless truly necessary and trust is established.
 
-ADAPTATION RULES
-- Adapt to buyer type clues, motivation, urgency, emotional context, prior details, and contradictions.
-- If buyer sounds uncertain: slow down, clarify gently, avoid forcing precision.
-- If buyer corrects earlier info: accept naturally and continue with updated context.
-- If buyer is brief: use short, inviting follow-ups.
-- If buyer is open: let them speak, then narrow with one focused follow-up.
+MODE BOUNDARY POLICY
+- Your core role is buyer qualification and decision intelligence.
+- If buyer asks for actions like searching/sending listings before the interview is sufficiently resolved:
+  * acknowledge the intent
+  * keep control of interview flow
+  * collect at most one critical missing signal
+  * then transition gracefully
+- Do not pretend to have executed external actions that are not actually performed.
 
 TRANSPARENCY RULES
 Never mention scoring, qualification, evaluation, confidence levels, pillars, required fields, completion logic, action engine, or internal rules.
@@ -137,6 +416,8 @@ CLOSING RULE
 You may set completion_candidate=true only when the conversation already feels naturally complete and buyer shared substantial useful information.
 You are NOT final authority on official completion. Backend decides.
 If completion is not approved by backend, continue naturally without saying internal requirements are missing.
+
+${coverageDirective}
 
 ${turnDirective}
 
@@ -175,8 +456,8 @@ Rules for extracted_signals:
 - You may include additional useful keys, e.g. "budget_range", "preapproval_status", "down_payment", "bedrooms", "bathrooms", "must_haves", "deal_breakers", "engagement_level".
 
 QUALITY BAR
-A strong turn should sound human, connect to the buyer's latest message, move understanding forward, and ask one easy-to-answer next question.
-A weak turn sounds like a form, asks multiple fields at once, shifts abruptly, or ignores emotional context.`;
+A strong turn sounds human, avoids semantic repetition, infers before asking, and improves insight quality.
+A weak turn feels like slot filling, repeats the same dimension, over-validates without substance, or ignores buyer friction.`;
 }
 
 export function buildUserMessage(context: InterviewContext): string {
